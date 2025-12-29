@@ -3,33 +3,36 @@ import Alpine from 'alpinejs';
 // Initialize Alpine
 window.Alpine = Alpine;
 
-// Map instance (using MapLibre GL JS)
+// Map instance (using Leaflet with OpenStreetMap - completely free, no API key needed)
 let map = null;
 let markers = [];
-let maplibregl = null;
+let L = null;
 
-// TomTom API key from environment variable
+// TomTom API key (only used for business search, not for map tiles)
 const TOMTOM_API_KEY = import.meta.env.VITE_TOMTOM_API_KEY;
 
-// Load MapLibre GL JS dynamically (no TomTom SDK to avoid custom style issues)
-function loadMapLibre() {
+// Load Leaflet dynamically
+function loadLeaflet() {
   return new Promise((resolve, reject) => {
-    if (window.maplibregl) {
-      resolve(window.maplibregl);
+    if (window.L) {
+      resolve(window.L);
       return;
     }
 
-    // Load MapLibre CSS
+    // Load Leaflet CSS
     const css = document.createElement('link');
     css.rel = 'stylesheet';
-    css.href = 'https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    css.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+    css.crossOrigin = '';
     document.head.appendChild(css);
 
-    // Load MapLibre JS
+    // Load Leaflet JS
     const script = document.createElement('script');
-    script.src = 'https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js';
-    script.async = true;
-    script.onload = () => resolve(window.maplibregl);
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+    script.crossOrigin = '';
+    script.onload = () => resolve(window.L);
     script.onerror = reject;
     document.head.appendChild(script);
   });
@@ -58,28 +61,25 @@ document.addEventListener('alpine:init', () => {
       await this.initMap();
     },
 
-    // Initialize Map using MapLibre with TomTom tiles
+    // Initialize Map using Leaflet with OpenStreetMap tiles (FREE - no API key needed)
     async initMap() {
       try {
-        maplibregl = await loadMapLibre();
+        L = await loadLeaflet();
 
-        // Use TomTom's basic_main style directly - no custom styles
-        const styleUrl = `https://api.tomtom.com/style/1/style/22.2.1-*?map=basic_main&key=${TOMTOM_API_KEY}`;
+        // Create map with OpenStreetMap tiles - completely free, no API key
+        map = L.map('map').setView([37.7749, -122.4194], 12); // San Francisco default
 
-        map = new maplibregl.Map({
-          container: 'map',
-          style: styleUrl,
-          center: [-122.4194, 37.7749], // San Francisco default [lng, lat]
-          zoom: 12,
-        });
+        // Add OpenStreetMap tiles (free, no API key required)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
 
-        // Add navigation controls
-        map.addControl(new maplibregl.NavigationControl());
       } catch (error) {
         console.error('Failed to initialize map:', error);
         const mapContainer = document.getElementById('map');
         if (mapContainer) {
-          mapContainer.innerHTML = '<div class="flex items-center justify-center h-full text-slate-400">Map failed to load. Check your API key.</div>';
+          mapContainer.innerHTML = '<div class="flex items-center justify-center h-full text-slate-400">Map failed to load</div>';
         }
       }
     },
@@ -124,15 +124,12 @@ document.addEventListener('alpine:init', () => {
 
       // Fly to location on map
       if (map && lead.location) {
-        map.flyTo({
-          center: [lead.location.lng, lead.location.lat],
-          zoom: 15,
-        });
+        map.flyTo([lead.location.lat, lead.location.lng], 15);
 
-        // Show popup for selected marker
+        // Open popup for selected marker
         markers.forEach((marker) => {
-          if (marker.leadId === lead.id && marker.popup) {
-            marker.popup.addTo(map);
+          if (marker.leadId === lead.id) {
+            marker.openPopup();
           }
         });
       }
@@ -201,44 +198,35 @@ document.addEventListener('alpine:init', () => {
 
     // Render markers on map
     renderMarkersOnMap() {
-      if (!maplibregl || !map) return;
+      if (!L || !map) return;
       clearMarkers();
 
       this.leads.forEach((lead) => {
         if (!lead.location) return;
 
-        // Create marker element
-        const markerElement = document.createElement('div');
-        markerElement.className = 'custom-marker';
-        markerElement.style.cssText = `
-          width: 16px;
-          height: 16px;
-          background-color: ${getMarkerColor(lead)};
-          border: 2px solid white;
-          border-radius: 50%;
-          cursor: pointer;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        `;
+        const color = getMarkerColor(lead);
+
+        // Create a circle marker (simpler and works well)
+        const marker = L.circleMarker([lead.location.lat, lead.location.lng], {
+          radius: 10,
+          fillColor: color,
+          color: '#ffffff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.9,
+        }).addTo(map);
 
         // Create popup
-        const popup = new maplibregl.Popup({ offset: 20 }).setHTML(`
+        marker.bindPopup(`
           <div style="color: #1e293b; padding: 4px;">
             <strong>${lead.name}</strong><br>
             <small>${lead.address || ''}</small>
           </div>
         `);
 
-        // Create marker
-        const marker = new maplibregl.Marker({ element: markerElement })
-          .setLngLat([lead.location.lng, lead.location.lat])
-          .setPopup(popup)
-          .addTo(map);
-
         marker.leadId = lead.id;
-        marker.markerElement = markerElement;
-        marker.popup = popup;
 
-        markerElement.addEventListener('click', () => {
+        marker.on('click', () => {
           this.selectLead(lead);
         });
 
@@ -249,21 +237,17 @@ document.addEventListener('alpine:init', () => {
     // Update marker after analysis
     updateMarkerForLead(lead) {
       const marker = markers.find((m) => m.leadId === lead.id);
-      if (marker && marker.markerElement) {
-        marker.markerElement.style.backgroundColor = getMarkerColor(lead);
+      if (marker) {
+        marker.setStyle({ fillColor: getMarkerColor(lead) });
       }
     },
 
     // Fit map to show all markers
     fitMapToBounds() {
-      if (markers.length === 0 || !maplibregl || !map) return;
+      if (markers.length === 0 || !L || !map) return;
 
-      const bounds = new maplibregl.LngLatBounds();
-      markers.forEach((marker) => {
-        bounds.extend(marker.getLngLat());
-      });
-
-      map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
+      const group = L.featureGroup(markers);
+      map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 15 });
     },
 
     // Copy pitch to clipboard
