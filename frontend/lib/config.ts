@@ -1,6 +1,6 @@
 export const config = {
   tomtom: {
-    apiKey: process.env.TOMTOM_API_KEY || '',
+    apiKey: process.env.VITE_TOMTOM_API_KEY || '',
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
