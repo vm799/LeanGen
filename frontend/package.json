@@ -12,13 +12,12 @@
   "keywords": [
     "lead-generation",
     "ai",
-    "google-maps"
+    "tomtom"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
-    "@googlemaps/google-maps-services-js": "^3.4.0",
     "alpinejs": "^3.14.1",
     "cheerio": "^1.0.0",
     "zod": "^3.23.8"

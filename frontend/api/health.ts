@@ -23,21 +23,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     services: {},
   };
 
-  // Check Google Maps/Places API
+  // Check TomTom API
   try {
     const start = Date.now();
     const isHealthy = await placesHealthCheck();
     const responseTime = Date.now() - start;
 
-    health.services.maps = {
+    health.services.tomtom = {
       status: isHealthy ? 'up' : 'down',
       responseTime,
-      ...(isHealthy ? {} : { error: 'Maps API not responding' }),
+      ...(isHealthy ? {} : { error: 'TomTom API not responding' }),
     };
 
     if (!isHealthy) health.status = 'degraded';
   } catch {
-    health.services.maps = { status: 'down', error: 'Maps API check failed' };
+    health.services.tomtom = { status: 'down', error: 'TomTom API check failed' };
     health.status = 'degraded';
   }
 
