@@ -3,25 +3,33 @@ import Alpine from 'alpinejs';
 // Initialize Alpine
 window.Alpine = Alpine;
 
-// TomTom map instance
+// Map instance (using MapLibre GL JS)
 let map = null;
 let markers = [];
+let maplibregl = null;
 
 // TomTom API key from environment variable
 const TOMTOM_API_KEY = import.meta.env.VITE_TOMTOM_API_KEY;
 
-// Load TomTom SDK dynamically
-function loadTomTomSDK() {
+// Load MapLibre GL JS dynamically (no TomTom SDK to avoid custom style issues)
+function loadMapLibre() {
   return new Promise((resolve, reject) => {
-    if (window.tt) {
-      resolve(window.tt);
+    if (window.maplibregl) {
+      resolve(window.maplibregl);
       return;
     }
 
+    // Load MapLibre CSS
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css';
+    document.head.appendChild(css);
+
+    // Load MapLibre JS
     const script = document.createElement('script');
-    script.src = 'https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js';
+    script.src = 'https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js';
     script.async = true;
-    script.onload = () => resolve(window.tt);
+    script.onload = () => resolve(window.maplibregl);
     script.onerror = reject;
     document.head.appendChild(script);
   });
@@ -50,35 +58,25 @@ document.addEventListener('alpine:init', () => {
       await this.initMap();
     },
 
-    // Initialize TomTom Map
+    // Initialize Map using MapLibre with TomTom tiles
     async initMap() {
       try {
-        const tt = await loadTomTomSDK();
+        maplibregl = await loadMapLibre();
 
-        // Use explicit basic style URL - this is TomTom's standard vector tile style
-        const basicStyleUrl = `https://api.tomtom.com/style/1/style/22.2.1-*?map=basic_main&key=${TOMTOM_API_KEY}`;
+        // Use TomTom's basic_main style directly - no custom styles
+        const styleUrl = `https://api.tomtom.com/style/1/style/22.2.1-*?map=basic_main&key=${TOMTOM_API_KEY}`;
 
-        map = tt.map({
-          key: TOMTOM_API_KEY,
+        map = new maplibregl.Map({
           container: 'map',
+          style: styleUrl,
           center: [-122.4194, 37.7749], // San Francisco default [lng, lat]
           zoom: 12,
-          style: basicStyleUrl,
-          // Intercept requests to block custom style loading and redirect to basic style
-          transformRequest: (url, resourceType) => {
-            // If SDK tries to load a custom style, redirect to basic style
-            if (url.includes('/style/2/custom/')) {
-              return { url: basicStyleUrl };
-            }
-            return { url };
-          },
         });
 
         // Add navigation controls
-        map.addControl(new tt.NavigationControl());
+        map.addControl(new maplibregl.NavigationControl());
       } catch (error) {
         console.error('Failed to initialize map:', error);
-        // Fallback: show error in map container
         const mapContainer = document.getElementById('map');
         if (mapContainer) {
           mapContainer.innerHTML = '<div class="flex items-center justify-center h-full text-slate-400">Map failed to load. Check your API key.</div>';
@@ -131,10 +129,10 @@ document.addEventListener('alpine:init', () => {
           zoom: 15,
         });
 
-        // Highlight marker with popup
+        // Show popup for selected marker
         markers.forEach((marker) => {
-          if (marker.leadId === lead.id) {
-            marker.togglePopup();
+          if (marker.leadId === lead.id && marker.popup) {
+            marker.popup.addTo(map);
           }
         });
       }
@@ -203,12 +201,13 @@ document.addEventListener('alpine:init', () => {
 
     // Render markers on map
     renderMarkersOnMap() {
-      if (!window.tt) return;
+      if (!maplibregl || !map) return;
       clearMarkers();
 
       this.leads.forEach((lead) => {
         if (!lead.location) return;
 
+        // Create marker element
         const markerElement = document.createElement('div');
         markerElement.className = 'custom-marker';
         markerElement.style.cssText = `
@@ -221,20 +220,23 @@ document.addEventListener('alpine:init', () => {
           box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         `;
 
-        const popup = new tt.Popup({ offset: 20 }).setHTML(`
+        // Create popup
+        const popup = new maplibregl.Popup({ offset: 20 }).setHTML(`
           <div style="color: #1e293b; padding: 4px;">
             <strong>${lead.name}</strong><br>
             <small>${lead.address || ''}</small>
           </div>
         `);
 
-        const marker = new tt.Marker({ element: markerElement })
+        // Create marker
+        const marker = new maplibregl.Marker({ element: markerElement })
           .setLngLat([lead.location.lng, lead.location.lat])
           .setPopup(popup)
           .addTo(map);
 
         marker.leadId = lead.id;
         marker.markerElement = markerElement;
+        marker.popup = popup;
 
         markerElement.addEventListener('click', () => {
           this.selectLead(lead);
@@ -254,9 +256,9 @@ document.addEventListener('alpine:init', () => {
 
     // Fit map to show all markers
     fitMapToBounds() {
-      if (markers.length === 0 || !window.tt) return;
+      if (markers.length === 0 || !maplibregl || !map) return;
 
-      const bounds = new tt.LngLatBounds();
+      const bounds = new maplibregl.LngLatBounds();
       markers.forEach((marker) => {
         bounds.extend(marker.getLngLat());
       });
