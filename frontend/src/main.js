@@ -55,15 +55,23 @@ document.addEventListener('alpine:init', () => {
       try {
         const tt = await loadTomTomSDK();
 
-        // Use explicit basic style URL to avoid custom style issues
-        const styleUrl = `https://api.tomtom.com/style/1/style/*?map=basic_main&key=${TOMTOM_API_KEY}`;
+        // Use explicit basic style URL - this is TomTom's standard vector tile style
+        const basicStyleUrl = `https://api.tomtom.com/style/1/style/22.2.1-*?map=basic_main&key=${TOMTOM_API_KEY}`;
 
         map = tt.map({
           key: TOMTOM_API_KEY,
           container: 'map',
           center: [-122.4194, 37.7749], // San Francisco default [lng, lat]
           zoom: 12,
-          style: styleUrl,
+          style: basicStyleUrl,
+          // Intercept requests to block custom style loading and redirect to basic style
+          transformRequest: (url, resourceType) => {
+            // If SDK tries to load a custom style, redirect to basic style
+            if (url.includes('/style/2/custom/')) {
+              return { url: basicStyleUrl };
+            }
+            return { url };
+          },
         });
 
         // Add navigation controls
