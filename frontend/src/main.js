@@ -55,11 +55,15 @@ document.addEventListener('alpine:init', () => {
       try {
         const tt = await loadTomTomSDK();
 
+        // Use explicit basic style URL to avoid custom style issues
+        const styleUrl = `https://api.tomtom.com/style/1/style/*?map=basic_main&key=${TOMTOM_API_KEY}`;
+
         map = tt.map({
           key: TOMTOM_API_KEY,
           container: 'map',
           center: [-122.4194, 37.7749], // San Francisco default [lng, lat]
           zoom: 12,
+          style: styleUrl,
         });
 
         // Add navigation controls
