@@ -5,7 +5,7 @@ const TOMTOM_BASE_URL = 'https://api.tomtom.com/search/2';
 
 interface TomTomPOIResult {
   id: string;
-  poi: {
+  poi?: {
     name: string;
     phone?: string;
     url?: string;
@@ -22,6 +22,7 @@ interface TomTomPOIResult {
     lon: number;
   };
   score?: number;
+  type?: string;
 }
 
 interface TomTomSearchResponse {
@@ -40,42 +41,56 @@ export async function searchPlaces(
   const apiKey = config.tomtom.apiKey;
 
   if (!apiKey) {
+    console.error('TomTom API key not configured. Check TOMTOM_API_KEY environment variable.');
     throw new Error('TomTom API key not configured');
   }
 
-  // Use TomTom POI Search
-  const query = encodeURIComponent(`${industry} in ${city}`);
-  const url = `${TOMTOM_BASE_URL}/poiSearch/${query}.json?key=${apiKey}&limit=${maxResults}&categorySet=7315`; // 7315 = restaurants/businesses
+  // Use Fuzzy Search with the full query - more reliable than POI search
+  // Format: "dentist in Austin, TX" or "pizza restaurant in New York"
+  const searchQuery = `${industry} in ${city}`;
+  const encodedQuery = encodeURIComponent(searchQuery);
+
+  // Build URL with proper parameters
+  const url = `${TOMTOM_BASE_URL}/search/${encodedQuery}.json?key=${apiKey}&limit=${maxResults}&typeahead=false&language=en-US`;
+
+  console.log('TomTom Search URL:', url.replace(apiKey, 'REDACTED'));
 
   const response = await fetch(url);
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error('TomTom search failed:', response.status, errorText);
     throw new Error(`TomTom search failed: ${response.status}`);
   }
 
   const data: TomTomSearchResponse = await response.json();
 
+  console.log('TomTom results count:', data.results?.length || 0);
+
   if (!data.results || data.results.length === 0) {
     return [];
   }
 
-  return data.results.map((result) => ({
-    place_id: result.id,
-    name: result.poi.name,
-    formatted_address: result.address.freeformAddress,
-    geometry: {
-      location: {
-        lat: result.position.lat,
-        lng: result.position.lon,
+  // Filter to only POI results (businesses) and map to our format
+  return data.results
+    .filter((result) => result.poi?.name) // Only include results with POI data
+    .map((result) => ({
+      place_id: result.id,
+      name: result.poi?.name || result.address.freeformAddress,
+      formatted_address: result.address.freeformAddress,
+      geometry: {
+        location: {
+          lat: result.position.lat,
+          lng: result.position.lon,
+        },
       },
-    },
-    rating: undefined, // TomTom doesn't provide ratings
-    user_ratings_total: undefined,
-    types: result.poi.categories || [],
-    business_status: 'OPERATIONAL',
-    website: result.poi.url,
-    phone: result.poi.phone,
-  }));
+      rating: undefined, // TomTom doesn't provide ratings
+      user_ratings_total: undefined,
+      types: result.poi?.categories || [],
+      business_status: 'OPERATIONAL',
+      website: result.poi?.url,
+      phone: result.poi?.phone,
+    }));
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
@@ -104,7 +119,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
 
   return {
     place_id: result.id,
-    name: result.poi.name,
+    name: result.poi?.name || result.address.freeformAddress,
     formatted_address: result.address.freeformAddress,
     geometry: {
       location: {
@@ -114,10 +129,10 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
     },
     rating: undefined,
     user_ratings_total: undefined,
-    types: result.poi.categories || [],
+    types: result.poi?.categories || [],
     business_status: 'OPERATIONAL',
-    website: result.poi.url,
-    formatted_phone_number: result.poi.phone,
+    website: result.poi?.url,
+    formatted_phone_number: result.poi?.phone,
     reviews: [], // TomTom doesn't provide reviews
   };
 }
@@ -127,7 +142,7 @@ export async function healthCheck(): Promise<boolean> {
     const apiKey = config.tomtom.apiKey;
     if (!apiKey) return false;
 
-    const url = `${TOMTOM_BASE_URL}/geocode/San%20Francisco.json?key=${apiKey}&limit=1`;
+    const url = `${TOMTOM_BASE_URL}/search/test.json?key=${apiKey}&limit=1`;
     const response = await fetch(url);
     return response.ok;
   } catch {

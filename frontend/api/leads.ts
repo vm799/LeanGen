@@ -65,6 +65,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error) {
     console.error('Search error:', error);
-    return res.status(500).json({ error: 'Search failed' });
+    const errorMessage = error instanceof Error ? error.message : 'Search failed';
+    return res.status(500).json({
+      error: errorMessage,
+      hint: 'Check that TOMTOM_API_KEY is set in Vercel environment variables',
+    });
   }
 }

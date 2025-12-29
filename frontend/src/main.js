@@ -109,6 +109,7 @@ document.addEventListener('alpine:init', () => {
       } catch (error) {
         this.error = error.message;
         console.error('Search error:', error);
+        alert('Search failed: ' + error.message);
       } finally {
         this.loadingInitial = false;
       }
