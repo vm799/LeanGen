@@ -27,7 +27,7 @@ document.addEventListener('alpine:init', () => {
     loadingInitial: false,
     analyzingLeadId: null,
     error: null,
-    showSidebar: false, // Mobile menu state
+    showResults: true, // Mobile: toggle between results and map
 
     // Initialize
     async init() {
@@ -100,16 +100,16 @@ document.addEventListener('alpine:init', () => {
         if (this.leads.length > 0) {
           this.renderMarkersOnMap();
           this.fitMapToBounds();
+          this.showResults = true; // Show results panel on mobile after search
         }
 
-        // Invalidate map size after search (in case sidebar state changed)
+        // Invalidate map size
         if (map) {
           setTimeout(() => map.invalidateSize(), 100);
         }
       } catch (error) {
-        this.error = error.message;
+        this.error = error.message || 'Search failed. Check console for details.';
         console.error('Search error:', error);
-        alert('Search failed: ' + error.message);
       } finally {
         this.loadingInitial = false;
       }

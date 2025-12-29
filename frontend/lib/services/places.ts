@@ -10,7 +10,6 @@ interface TomTomPOIResult {
     phone?: string;
     url?: string;
     categories?: string[];
-    classifications?: Array<{ code: string; names: Array<{ name: string }> }>;
   };
   address: {
     freeformAddress: string;
@@ -21,7 +20,6 @@ interface TomTomPOIResult {
     lat: number;
     lon: number;
   };
-  score?: number;
   type?: string;
 }
 
@@ -41,42 +39,40 @@ export async function searchPlaces(
   const apiKey = config.tomtom.apiKey;
 
   if (!apiKey) {
-    console.error('TomTom API key not configured. Check TOMTOM_API_KEY environment variable.');
-    throw new Error('TomTom API key not configured');
+    throw new Error('TOMTOM_API_KEY not configured in Vercel');
   }
 
-  // Use Fuzzy Search with the full query - more reliable than POI search
-  // Format: "dentist in Austin, TX" or "pizza restaurant in New York"
-  const searchQuery = `${industry} in ${city}`;
+  // TomTom Fuzzy Search API - search for businesses
+  // URL format: https://api.tomtom.com/search/2/search/{query}.json
+  const searchQuery = `${industry} ${city}`;
   const encodedQuery = encodeURIComponent(searchQuery);
 
-  // Build URL with proper parameters
-  const url = `${TOMTOM_BASE_URL}/search/${encodedQuery}.json?key=${apiKey}&limit=${maxResults}&typeahead=false&language=en-US`;
+  const url = `${TOMTOM_BASE_URL}/search/${encodedQuery}.json?key=${apiKey}&limit=${maxResults}&typeahead=false&language=en-US&idxSet=POI`;
 
-  console.log('TomTom Search URL:', url.replace(apiKey, 'REDACTED'));
+  console.log('Searching TomTom:', searchQuery);
 
-  const response = await fetch(url);
+  try {
+    const response = await fetch(url);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('TomTom search failed:', response.status, errorText);
-    throw new Error(`TomTom search failed: ${response.status}`);
-  }
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('TomTom API error:', response.status, errorText);
+      throw new Error(`TomTom API error: ${response.status}`);
+    }
 
-  const data: TomTomSearchResponse = await response.json();
+    const data: TomTomSearchResponse = await response.json();
 
-  console.log('TomTom results count:', data.results?.length || 0);
+    if (!data.results || data.results.length === 0) {
+      console.log('No results found');
+      return [];
+    }
 
-  if (!data.results || data.results.length === 0) {
-    return [];
-  }
+    console.log('Found', data.results.length, 'results');
 
-  // Filter to only POI results (businesses) and map to our format
-  return data.results
-    .filter((result) => result.poi?.name) // Only include results with POI data
-    .map((result) => ({
+    // Map results to our format - include ALL results, not just those with poi.name
+    return data.results.map((result) => ({
       place_id: result.id,
-      name: result.poi?.name || result.address.freeformAddress,
+      name: result.poi?.name || result.address.freeformAddress.split(',')[0],
       formatted_address: result.address.freeformAddress,
       geometry: {
         location: {
@@ -84,29 +80,31 @@ export async function searchPlaces(
           lng: result.position.lon,
         },
       },
-      rating: undefined, // TomTom doesn't provide ratings
+      rating: undefined,
       user_ratings_total: undefined,
       types: result.poi?.categories || [],
       business_status: 'OPERATIONAL',
       website: result.poi?.url,
       phone: result.poi?.phone,
     }));
+  } catch (error) {
+    console.error('Search error:', error);
+    throw error;
+  }
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
   const apiKey = config.tomtom.apiKey;
 
   if (!apiKey) {
-    throw new Error('TomTom API key not configured');
+    throw new Error('TOMTOM_API_KEY not configured');
   }
 
-  // Use TomTom Place by ID
   const url = `${TOMTOM_BASE_URL}/place.json?entityId=${placeId}&key=${apiKey}`;
-
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(`TomTom place details failed: ${response.status}`);
+    throw new Error(`Place details failed: ${response.status}`);
   }
 
   const data = await response.json();
@@ -133,7 +131,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
     business_status: 'OPERATIONAL',
     website: result.poi?.url,
     formatted_phone_number: result.poi?.phone,
-    reviews: [], // TomTom doesn't provide reviews
+    reviews: [],
   };
 }
 
