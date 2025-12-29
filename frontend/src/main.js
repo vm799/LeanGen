@@ -60,7 +60,6 @@ document.addEventListener('alpine:init', () => {
           container: 'map',
           center: [-122.4194, 37.7749], // San Francisco default [lng, lat]
           zoom: 12,
-          style: `https://api.tomtom.com/style/2/custom/style/dG9tdG9tQEBAZFdDY0xHRDdFd05WSGRHWU87ZTFmNWQ5MDgtODdlOC00NWRlLTgzMjAtNmJiN2RkZDc4ZThi.json?key=${TOMTOM_API_KEY}`,
         });
 
         // Add navigation controls
