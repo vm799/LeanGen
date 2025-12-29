@@ -3,40 +3,12 @@ import Alpine from 'alpinejs';
 // Initialize Alpine
 window.Alpine = Alpine;
 
-// Map instance (using Leaflet with OpenStreetMap - completely free, no API key needed)
+// Map instance (using Leaflet with OpenStreetMap - free, no API key needed for tiles)
 let map = null;
 let markers = [];
-let L = null;
 
-// TomTom API key (only used for business search, not for map tiles)
+// TomTom API key (only used for business search API, not for map display)
 const TOMTOM_API_KEY = import.meta.env.VITE_TOMTOM_API_KEY;
-
-// Load Leaflet dynamically
-function loadLeaflet() {
-  return new Promise((resolve, reject) => {
-    if (window.L) {
-      resolve(window.L);
-      return;
-    }
-
-    // Load Leaflet CSS
-    const css = document.createElement('link');
-    css.rel = 'stylesheet';
-    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    css.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
-    css.crossOrigin = '';
-    document.head.appendChild(css);
-
-    // Load Leaflet JS
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
-    script.crossOrigin = '';
-    script.onload = () => resolve(window.L);
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-}
 
 // Initialize app
 document.addEventListener('alpine:init', () => {
@@ -55,31 +27,49 @@ document.addEventListener('alpine:init', () => {
     loadingInitial: false,
     analyzingLeadId: null,
     error: null,
+    showSidebar: false, // Mobile menu state
 
     // Initialize
     async init() {
-      await this.initMap();
+      this.initMap();
     },
 
     // Initialize Map using Leaflet with OpenStreetMap tiles (FREE - no API key needed)
-    async initMap() {
+    initMap() {
       try {
-        L = await loadLeaflet();
+        // Check if Leaflet is loaded
+        if (typeof L === 'undefined') {
+          console.error('Leaflet not loaded');
+          return;
+        }
 
-        // Create map with OpenStreetMap tiles - completely free, no API key
-        map = L.map('map').setView([37.7749, -122.4194], 12); // San Francisco default
+        const mapContainer = document.getElementById('map');
+        if (!mapContainer) {
+          console.error('Map container not found');
+          return;
+        }
 
-        // Add OpenStreetMap tiles (free, no API key required)
+        // Create map with OpenStreetMap tiles - completely free, no API key required
+        map = L.map('map', {
+          center: [37.7749, -122.4194], // San Francisco default
+          zoom: 12,
+          zoomControl: true,
+        });
+
+        // Add OpenStreetMap tiles (free, reliable, no API key needed)
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
-          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         }).addTo(map);
+
+        // Handle map resize when sidebar toggles
+        setTimeout(() => map.invalidateSize(), 100);
 
       } catch (error) {
         console.error('Failed to initialize map:', error);
         const mapContainer = document.getElementById('map');
         if (mapContainer) {
-          mapContainer.innerHTML = '<div class="flex items-center justify-center h-full text-slate-400">Map failed to load</div>';
+          mapContainer.innerHTML = '<div class="flex items-center justify-center h-full text-slate-400 p-4 text-center">Map failed to load. Please refresh the page.</div>';
         }
       }
     },
@@ -90,7 +80,7 @@ document.addEventListener('alpine:init', () => {
       this.error = null;
       this.leads = [];
       this.selectedLead = null;
-      clearMarkers();
+      this.clearMarkers();
 
       try {
         const response = await fetch('/api/leads', {
@@ -100,15 +90,21 @@ document.addEventListener('alpine:init', () => {
         });
 
         if (!response.ok) {
-          throw new Error('Search failed');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Search failed');
         }
 
         const data = await response.json();
-        this.leads = data.leads;
+        this.leads = data.leads || [];
 
         if (this.leads.length > 0) {
           this.renderMarkersOnMap();
           this.fitMapToBounds();
+        }
+
+        // Invalidate map size after search (in case sidebar state changed)
+        if (map) {
+          setTimeout(() => map.invalidateSize(), 100);
         }
       } catch (error) {
         this.error = error.message;
@@ -121,6 +117,11 @@ document.addEventListener('alpine:init', () => {
     // Select lead and trigger deep analysis
     async selectLead(lead) {
       this.selectedLead = lead;
+
+      // Invalidate map size (mobile layout may have changed)
+      if (map) {
+        setTimeout(() => map.invalidateSize(), 100);
+      }
 
       // Fly to location on map
       if (map && lead.location) {
@@ -198,15 +199,15 @@ document.addEventListener('alpine:init', () => {
 
     // Render markers on map
     renderMarkersOnMap() {
-      if (!L || !map) return;
-      clearMarkers();
+      if (typeof L === 'undefined' || !map) return;
+      this.clearMarkers();
 
       this.leads.forEach((lead) => {
         if (!lead.location) return;
 
-        const color = getMarkerColor(lead);
+        const color = this.getMarkerColor(lead);
 
-        // Create a circle marker (simpler and works well)
+        // Create a circle marker
         const marker = L.circleMarker([lead.location.lat, lead.location.lng], {
           radius: 10,
           fillColor: color,
@@ -218,7 +219,7 @@ document.addEventListener('alpine:init', () => {
 
         // Create popup
         marker.bindPopup(`
-          <div style="color: #1e293b; padding: 4px;">
+          <div style="color: #1e293b; padding: 4px; min-width: 150px;">
             <strong>${lead.name}</strong><br>
             <small>${lead.address || ''}</small>
           </div>
@@ -234,17 +235,39 @@ document.addEventListener('alpine:init', () => {
       });
     },
 
+    // Get marker color based on opportunity score
+    getMarkerColor(lead) {
+      if (!lead.analysis) return '#94a3b8'; // slate-400 (not analyzed)
+
+      switch (lead.analysis.opportunityScore) {
+        case 'HIGH':
+          return '#ef4444'; // red-500
+        case 'MEDIUM':
+          return '#eab308'; // yellow-500
+        case 'LOW':
+          return '#22c55e'; // green-500
+        default:
+          return '#94a3b8'; // slate-400
+      }
+    },
+
     // Update marker after analysis
     updateMarkerForLead(lead) {
       const marker = markers.find((m) => m.leadId === lead.id);
       if (marker) {
-        marker.setStyle({ fillColor: getMarkerColor(lead) });
+        marker.setStyle({ fillColor: this.getMarkerColor(lead) });
       }
+    },
+
+    // Clear all markers
+    clearMarkers() {
+      markers.forEach((marker) => marker.remove());
+      markers = [];
     },
 
     // Fit map to show all markers
     fitMapToBounds() {
-      if (markers.length === 0 || !L || !map) return;
+      if (markers.length === 0 || typeof L === 'undefined' || !map) return;
 
       const group = L.featureGroup(markers);
       map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 15 });
@@ -259,6 +282,14 @@ document.addEventListener('alpine:init', () => {
         alert('Pitch copied to clipboard!');
       } catch (error) {
         console.error('Copy failed:', error);
+        // Fallback for mobile
+        const textarea = document.createElement('textarea');
+        textarea.value = this.selectedLead.analysis.aiAuditPitch;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        alert('Pitch copied!');
       }
     },
 
@@ -268,39 +299,17 @@ document.addEventListener('alpine:init', () => {
         const response = await fetch('/api/health');
         const data = await response.json();
 
-        const statusText = Object.entries(data.services)
-          .map(([service, status]) => `${service}: ${status.status}`)
+        const statusText = Object.entries(data.services || {})
+          .map(([service, status]) => `${service}: ${status.status || 'unknown'}`)
           .join('\n');
 
-        alert(`System Status: ${data.status}\n\n${statusText}`);
+        alert(`System Status: ${data.status || 'unknown'}\n\n${statusText || 'No services info'}`);
       } catch (error) {
-        alert('Failed to check system health');
+        alert('Failed to check system health. API may not be configured.');
       }
     },
   }));
 });
-
-// Helper: Get marker color based on opportunity score
-function getMarkerColor(lead) {
-  if (!lead.analysis) return '#94a3b8'; // slate-400 (not analyzed)
-
-  switch (lead.analysis.opportunityScore) {
-    case 'HIGH':
-      return '#ef4444'; // red-500
-    case 'MEDIUM':
-      return '#eab308'; // yellow-500
-    case 'LOW':
-      return '#22c55e'; // green-500
-    default:
-      return '#94a3b8'; // slate-400
-  }
-}
-
-// Helper: Clear all markers
-function clearMarkers() {
-  markers.forEach((marker) => marker.remove());
-  markers = [];
-}
 
 // Start Alpine
 Alpine.start();
