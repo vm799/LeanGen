@@ -3,9 +3,29 @@ import Alpine from 'alpinejs';
 // Initialize Alpine
 window.Alpine = Alpine;
 
-// Google Maps instance
+// TomTom map instance
 let map = null;
 let markers = [];
+
+// TomTom API key from environment variable
+const TOMTOM_API_KEY = import.meta.env.VITE_TOMTOM_API_KEY;
+
+// Load TomTom SDK dynamically
+function loadTomTomSDK() {
+  return new Promise((resolve, reject) => {
+    if (window.tt) {
+      resolve(window.tt);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js';
+    script.async = true;
+    script.onload = () => resolve(window.tt);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
 
 // Initialize app
 document.addEventListener('alpine:init', () => {
@@ -26,21 +46,32 @@ document.addEventListener('alpine:init', () => {
     error: null,
 
     // Initialize
-    init() {
-      this.initMap();
+    async init() {
+      await this.initMap();
     },
 
-    // Initialize Google Map
-    initMap() {
-      map = new google.maps.Map(document.getElementById('map'), {
-        center: { lat: 37.7749, lng: -122.4194 }, // San Francisco default
-        zoom: 12,
-        styles: getDarkMapStyle(),
-        disableDefaultUI: false,
-        zoomControl: true,
-        mapTypeControl: false,
-        streetViewControl: false,
-      });
+    // Initialize TomTom Map
+    async initMap() {
+      try {
+        const tt = await loadTomTomSDK();
+
+        map = tt.map({
+          key: TOMTOM_API_KEY,
+          container: 'map',
+          center: [-122.4194, 37.7749], // San Francisco default [lng, lat]
+          zoom: 12,
+        });
+
+        // Add navigation controls
+        map.addControl(new tt.NavigationControl());
+      } catch (error) {
+        console.error('Failed to initialize map:', error);
+        // Fallback: show error in map container
+        const mapContainer = document.getElementById('map');
+        if (mapContainer) {
+          mapContainer.innerHTML = '<div class="flex items-center justify-center h-full text-slate-400">Map failed to load. Check your API key.</div>';
+        }
+      }
     },
 
     // Main search function
@@ -83,14 +114,15 @@ document.addEventListener('alpine:init', () => {
 
       // Fly to location on map
       if (map && lead.location) {
-        map.panTo(lead.location);
-        map.setZoom(15);
+        map.flyTo({
+          center: [lead.location.lng, lead.location.lat],
+          zoom: 15,
+        });
 
-        // Highlight marker
+        // Highlight marker with popup
         markers.forEach((marker) => {
           if (marker.leadId === lead.id) {
-            marker.setAnimation(google.maps.Animation.BOUNCE);
-            setTimeout(() => marker.setAnimation(null), 2000);
+            marker.togglePopup();
           }
         });
       }
@@ -159,28 +191,40 @@ document.addEventListener('alpine:init', () => {
 
     // Render markers on map
     renderMarkersOnMap() {
+      if (!window.tt) return;
       clearMarkers();
 
       this.leads.forEach((lead) => {
         if (!lead.location) return;
 
-        const marker = new google.maps.Marker({
-          position: lead.location,
-          map: map,
-          title: lead.name,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 8,
-            fillColor: getMarkerColor(lead),
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 2,
-          },
-        });
+        const markerElement = document.createElement('div');
+        markerElement.className = 'custom-marker';
+        markerElement.style.cssText = `
+          width: 16px;
+          height: 16px;
+          background-color: ${getMarkerColor(lead)};
+          border: 2px solid white;
+          border-radius: 50%;
+          cursor: pointer;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        `;
+
+        const popup = new tt.Popup({ offset: 20 }).setHTML(`
+          <div style="color: #1e293b; padding: 4px;">
+            <strong>${lead.name}</strong><br>
+            <small>${lead.address || ''}</small>
+          </div>
+        `);
+
+        const marker = new tt.Marker({ element: markerElement })
+          .setLngLat([lead.location.lng, lead.location.lat])
+          .setPopup(popup)
+          .addTo(map);
 
         marker.leadId = lead.id;
+        marker.markerElement = markerElement;
 
-        marker.addListener('click', () => {
+        markerElement.addEventListener('click', () => {
           this.selectLead(lead);
         });
 
@@ -191,34 +235,21 @@ document.addEventListener('alpine:init', () => {
     // Update marker after analysis
     updateMarkerForLead(lead) {
       const marker = markers.find((m) => m.leadId === lead.id);
-      if (marker) {
-        marker.setIcon({
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 8,
-          fillColor: getMarkerColor(lead),
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
-        });
+      if (marker && marker.markerElement) {
+        marker.markerElement.style.backgroundColor = getMarkerColor(lead);
       }
     },
 
     // Fit map to show all markers
     fitMapToBounds() {
-      if (markers.length === 0) return;
+      if (markers.length === 0 || !window.tt) return;
 
-      const bounds = new google.maps.LatLngBounds();
+      const bounds = new tt.LngLatBounds();
       markers.forEach((marker) => {
-        bounds.extend(marker.getPosition());
+        bounds.extend(marker.getLngLat());
       });
 
-      map.fitBounds(bounds);
-
-      // Ensure minimum zoom level
-      const listener = google.maps.event.addListener(map, 'idle', () => {
-        if (map.getZoom() > 15) map.setZoom(15);
-        google.maps.event.removeListener(listener);
-      });
+      map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
     },
 
     // Copy pitch to clipboard
@@ -269,92 +300,8 @@ function getMarkerColor(lead) {
 
 // Helper: Clear all markers
 function clearMarkers() {
-  markers.forEach((marker) => marker.setMap(null));
+  markers.forEach((marker) => marker.remove());
   markers = [];
-}
-
-// Helper: Dark map style
-function getDarkMapStyle() {
-  return [
-    { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
-    {
-      featureType: 'administrative.locality',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#cbd5e1' }],
-    },
-    {
-      featureType: 'poi',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#64748b' }],
-    },
-    {
-      featureType: 'poi.park',
-      elementType: 'geometry',
-      stylers: [{ color: '#1e3a28' }],
-    },
-    {
-      featureType: 'poi.park',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#6b8e23' }],
-    },
-    {
-      featureType: 'road',
-      elementType: 'geometry',
-      stylers: [{ color: '#334155' }],
-    },
-    {
-      featureType: 'road',
-      elementType: 'geometry.stroke',
-      stylers: [{ color: '#1e293b' }],
-    },
-    {
-      featureType: 'road',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#94a3b8' }],
-    },
-    {
-      featureType: 'road.highway',
-      elementType: 'geometry',
-      stylers: [{ color: '#475569' }],
-    },
-    {
-      featureType: 'road.highway',
-      elementType: 'geometry.stroke',
-      stylers: [{ color: '#1e293b' }],
-    },
-    {
-      featureType: 'road.highway',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#cbd5e1' }],
-    },
-    {
-      featureType: 'transit',
-      elementType: 'geometry',
-      stylers: [{ color: '#1e293b' }],
-    },
-    {
-      featureType: 'transit.station',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#64748b' }],
-    },
-    {
-      featureType: 'water',
-      elementType: 'geometry',
-      stylers: [{ color: '#0c1429' }],
-    },
-    {
-      featureType: 'water',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#475569' }],
-    },
-    {
-      featureType: 'water',
-      elementType: 'labels.text.stroke',
-      stylers: [{ color: '#0f172a' }],
-    },
-  ];
 }
 
 // Start Alpine
