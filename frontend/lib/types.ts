@@ -50,7 +50,7 @@ export interface SearchFilters {
   radiusMiles?: number;
 }
 
-// Google Places Types
+// TomTom Places Types
 export interface PlaceSearchResult {
   place_id: string;
   name: string;
@@ -131,7 +131,7 @@ export interface SEOAnalysis {
   gaps: string[];
 }
 
-// Google Search Types
+// Search Result Types
 export interface SearchResult {
   title: string;
   link: string;
@@ -172,9 +172,8 @@ export interface HealthCheck {
   status: 'healthy' | 'degraded' | 'critical';
   timestamp: string;
   services: {
-    maps?: ServiceStatus;
+    tomtom?: ServiceStatus;
     gemini?: ServiceStatus;
-    search?: ServiceStatus;
   };
 }
 
