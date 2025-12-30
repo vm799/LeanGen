@@ -39,7 +39,9 @@ document.addEventListener('alpine:init', () => {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || errorData.hint || `API error: ${response.status}`);
+          const errorMsg = errorData.error || `API error: ${response.status}`;
+          const hint = errorData.hint ? ` (${errorData.hint})` : '';
+          throw new Error(errorMsg + hint);
         }
 
         const data = await response.json();
