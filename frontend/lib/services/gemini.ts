@@ -1,11 +1,89 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { config } from '../config';
-import { BusinessContext, LeadAnalysis } from '../types';
 
-export async function analyzeBusinessOpportunity(context: BusinessContext): Promise<LeadAnalysis> {
-  const client = new GoogleGenerativeAI(config.gemini.apiKey);
+export interface ComprehensiveAnalysis {
+  opportunityScore: 'HIGH' | 'MEDIUM' | 'LOW';
+  summary: string;
+  websiteRecommendations: string[];
+  socialMediaRecommendations: string[];
+  serviceOptimizations: string[];
+  aiAutomationOpportunities: string[];
+  estimatedContactName: string;
+  draftEmail: string;
+  quickWins: string[];
+  longTermStrategy: string;
+}
 
-  const prompt = buildAnalysisPrompt(context);
+export interface SimpleBusinessContext {
+  name: string;
+  address: string;
+  industry: string;
+  phone?: string | null;
+}
+
+export async function analyzeBusinessComprehensive(context: SimpleBusinessContext): Promise<ComprehensiveAnalysis> {
+  const apiKey = config.gemini.apiKey;
+
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY not configured');
+  }
+
+  const client = new GoogleGenerativeAI(apiKey);
+
+  const prompt = `You are a senior AI & automation consultant helping agencies find and pitch to local SMBs.
+
+BUSINESS TO ANALYZE:
+- Business Name: ${context.name}
+- Address: ${context.address}
+- Industry/Category: ${context.industry}
+${context.phone ? `- Phone: ${context.phone}` : ''}
+
+YOUR TASK:
+Analyze this business and provide comprehensive, actionable insights for an AI agency to pitch their services. Generate a JSON response with these exact fields:
+
+{
+  "opportunityScore": "HIGH" or "MEDIUM" or "LOW",
+  "summary": "2-3 sentence overview of the business's digital presence and main opportunities",
+  "websiteRecommendations": [
+    "Specific recommendation 1 for their website",
+    "Specific recommendation 2",
+    "Specific recommendation 3"
+  ],
+  "socialMediaRecommendations": [
+    "Specific social media improvement 1",
+    "Specific social media improvement 2",
+    "Specific social media improvement 3"
+  ],
+  "serviceOptimizations": [
+    "How to improve their core service delivery with AI",
+    "Automation opportunity for operations",
+    "Customer experience enhancement"
+  ],
+  "aiAutomationOpportunities": [
+    "AI chatbot for 24/7 customer support",
+    "Automated appointment booking",
+    "AI-powered review response system",
+    "Social media content automation"
+  ],
+  "estimatedContactName": "Best guess at owner/manager name based on business type (e.g., 'Business Owner' or a common name for this industry)",
+  "draftEmail": "A complete, professional outreach email (3-4 paragraphs) that:\n- Opens with a specific compliment about their business\n- Identifies 2-3 specific opportunities you noticed\n- Offers a free audit or consultation\n- Has a clear call to action\n- Is personalized with their business name\n- Sounds human, not salesy",
+  "quickWins": [
+    "Easy win they can implement this week",
+    "Another quick improvement",
+    "Third fast result"
+  ],
+  "longTermStrategy": "2-3 sentence description of a 6-month transformation plan"
+}
+
+INDUSTRY-SPECIFIC INSIGHTS:
+- For restaurants: Focus on online ordering, reservation systems, review management, menu optimization
+- For salons/spas: Focus on booking automation, reminder systems, loyalty programs, Instagram presence
+- For dentists/doctors: Focus on patient portals, appointment reminders, review generation, HIPAA-compliant chat
+- For retailers: Focus on inventory management, e-commerce, local SEO, Google Business optimization
+- For service businesses: Focus on quote automation, scheduling, follow-up sequences, referral programs
+
+Be specific to their business type. Use their actual business name in the email.
+Return ONLY valid JSON, no markdown, no explanation.`;
 
   const model = client.getGenerativeModel({
     model: config.gemini.model,
@@ -17,80 +95,13 @@ export async function analyzeBusinessOpportunity(context: BusinessContext): Prom
 
   const result = await model.generateContent(prompt);
   const response = result.response.text();
-  const analysis = JSON.parse(response);
 
-  if (
-    !analysis.digitalPresenceSummary ||
-    !analysis.opportunityScore ||
-    !analysis.keyGaps ||
-    !analysis.aiAuditPitch
-  ) {
-    throw new Error('Invalid AI response structure');
+  try {
+    const analysis = JSON.parse(response);
+    return analysis as ComprehensiveAnalysis;
+  } catch {
+    throw new Error('Failed to parse AI response');
   }
-
-  return {
-    digitalPresenceSummary: analysis.digitalPresenceSummary,
-    opportunityScore: analysis.opportunityScore,
-    keyGaps: analysis.keyGaps,
-    aiAuditPitch: analysis.aiAuditPitch,
-    recommendedTools: analysis.recommendedTools || [],
-  };
-}
-
-function buildAnalysisPrompt(context: BusinessContext): string {
-  const websiteStatus = context.websiteHtml
-    ? 'Yes'
-    : context.hasOnlineBooking !== null
-    ? 'Unknown (could not fetch)'
-    : 'No';
-
-  return `You are a senior marketing and AI consultant for small local businesses.
-
-BUSINESS CONTEXT:
-- Name: ${context.name}
-- Industry: ${context.industry}
-- Location: ${context.city}
-- Google Rating: ${context.rating}/5 (${context.reviewCount} reviews)
-- Has Website: ${websiteStatus}
-- Has AI Chatbot: ${context.hasChatbot ?? 'Unknown'}
-- Has Online Booking: ${context.hasOnlineBooking ?? 'Unknown'}
-
-RECENT REVIEWS (last 3):
-${context.recentReviews.slice(0, 3).join('\n\n---\n\n') || 'No reviews available'}
-
-DETECTED UX GAPS:
-${context.uxGaps.length > 0 ? context.uxGaps.join('\n') : 'None detected'}
-
-GOOGLE SEARCH INSIGHTS:
-${
-  context.googleSearchResults.length > 0
-    ? context.googleSearchResults.map((r) => `- ${r.title}: ${r.snippet}`).join('\n')
-    : 'No additional search insights'
-}
-
-TASK:
-Analyze this business and generate a JSON response with NO additional text, markdown, or explanation:
-
-{
-  "digitalPresenceSummary": "2-4 sentences describing current digital presence strengths and weaknesses",
-  "opportunityScore": "HIGH|MEDIUM|LOW",
-  "keyGaps": ["specific gap 1", "specific gap 2", "specific gap 3"],
-  "aiAuditPitch": "Personalized 3-4 sentence pitch for an AI/marketing audit that references their specific situation, strengths, and opportunities. Use their business name and be specific.",
-  "recommendedTools": ["tool 1", "tool 2", "tool 3"]
-}
-
-SCORING CRITERIA:
-- HIGH: 3+ significant gaps, rating 3.5-4.0, negative/mixed sentiment, no chatbot, manual booking
-- MEDIUM: 2 gaps, rating 4.0-4.5, mixed sentiment, missing 1-2 key features
-- LOW: 0-1 gaps, rating 4.5+, positive sentiment, strong digital presence
-
-PITCH GUIDELINES:
-- Start with their strength (e.g., "Your 4.2-star rating shows customers appreciate...")
-- Identify specific opportunity (e.g., "However, without an AI chatbot...")
-- Quantify benefit (e.g., "Adding automated booking could save 10+ hours/week")
-- End with clear next step (e.g., "I'd love to show you how...")
-
-Return ONLY the JSON object. No markdown formatting, no explanation, no additional text.`;
 }
 
 export async function healthCheck(): Promise<boolean> {
