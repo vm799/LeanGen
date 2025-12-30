@@ -28,6 +28,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Check API key first
+  const hasApiKey = !!(process.env.TOMTOM_API_KEY || process.env.VITE_TOMTOM_API_KEY);
+  if (!hasApiKey) {
+    return res.status(500).json({
+      error: 'TOMTOM_API_KEY not configured',
+      hint: 'Add TOMTOM_API_KEY to Vercel Environment Variables (Project Settings → Environment Variables)',
+    });
+  }
+
   try {
     const validationResult = searchParamsSchema.safeParse(req.body);
     if (!validationResult.success) {
