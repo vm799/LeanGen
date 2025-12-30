@@ -1,17 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { z } from 'zod';
 import { searchPlaces } from '../lib/services/places';
-import { Lead } from '../lib/types';
 
 const searchParamsSchema = z.object({
-  industry: z.string().min(2).max(100),
-  city: z.string().min(2).max(100),
-  filters: z
-    .object({
-      minRating: z.number().min(1).max(5).optional(),
-      maxRating: z.number().min(1).max(5).optional(),
-    })
-    .optional(),
+  industry: z.string().min(1).max(100),
+  city: z.string().min(1).max(100),
 });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -28,32 +21,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Check API key first
-  const hasApiKey = !!(process.env.TOMTOM_API_KEY || process.env.VITE_TOMTOM_API_KEY);
-  if (!hasApiKey) {
-    return res.status(500).json({
-      error: 'TOMTOM_API_KEY not configured',
-      hint: 'Add TOMTOM_API_KEY to Vercel Environment Variables (Project Settings → Environment Variables)',
-    });
-  }
-
   try {
+    // Log incoming request
+    console.log('Request body:', JSON.stringify(req.body));
+
     const validationResult = searchParamsSchema.safeParse(req.body);
     if (!validationResult.success) {
       return res.status(400).json({
-        error: `Invalid search parameters: ${validationResult.error.message}`,
+        error: 'Invalid parameters',
+        details: validationResult.error.flatten(),
       });
     }
 
-    const { industry, city, filters } = validationResult.data;
+    const { industry, city } = validationResult.data;
+    console.log('Searching for:', industry, 'in', city);
 
-    const places = await searchPlaces(industry, city, {
-      minRating: filters?.minRating,
-      maxRating: filters?.maxRating,
-      maxResults: 20,
-    });
+    const places = await searchPlaces(industry, city, { maxResults: 20 });
+    console.log('Found places:', places.length);
 
-    const leads: Lead[] = places.map((place) => ({
+    const leads = places.map((place) => ({
       id: place.place_id,
       name: place.name,
       category: place.types?.[0] || null,
@@ -61,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       rating: place.rating || null,
       reviewCount: place.user_ratings_total || null,
       location: place.geometry.location,
-      mapsUrl: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+      mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + ' ' + place.formatted_address)}`,
       websiteUrl: null,
       phone: null,
       analyzed: false,
@@ -70,14 +56,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       leads,
       total: leads.length,
-      cached: false,
     });
   } catch (error) {
-    console.error('Search error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Search failed';
+    console.error('Error:', error);
     return res.status(500).json({
-      error: errorMessage,
-      hint: 'Check that TOMTOM_API_KEY is set in Vercel environment variables',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
     });
   }
 }
