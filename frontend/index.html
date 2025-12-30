@@ -2,185 +2,269 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>LeadGenius - AI Lead Generation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeadGenius - AI Agency Lead Finder</title>
   <link rel="stylesheet" href="/src/styles/main.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <style>
-    /* Critical mobile styles */
-    @media (max-width: 768px) {
-      .mobile-full { min-height: 100vh; }
-      .mobile-scroll { -webkit-overflow-scrolling: touch; }
-    }
-  </style>
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans antialiased">
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen">
 
   <div id="app" x-data="scoutApp()" class="min-h-screen flex flex-col">
 
-    <!-- Header - Always visible -->
-    <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex-shrink-0">
-      <div class="flex items-center justify-between max-w-7xl mx-auto">
-        <div class="flex items-center gap-2">
-          <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center text-lg">🎯</div>
-          <h1 class="text-lg font-bold">LeadGenius</h1>
+    <!-- Header -->
+    <header class="bg-slate-900 border-b border-slate-800 px-4 py-4">
+      <div class="max-w-6xl mx-auto">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center text-xl">🎯</div>
+          <div>
+            <h1 class="text-xl font-bold">LeadGenius</h1>
+            <p class="text-xs text-slate-400">Find SMBs that need AI & Automation</p>
+          </div>
         </div>
-        <div class="flex gap-2">
-          <button
-            x-show="leads.length > 0"
-            @click="showResults = !showResults"
-            class="md:hidden px-3 py-1.5 text-xs bg-slate-800 rounded-lg"
-            x-text="showResults ? 'Map' : `Results (${leads.length})`"
-          ></button>
-        </div>
-      </div>
-    </header>
 
-    <!-- Search Form - Always visible on top for mobile -->
-    <div class="bg-slate-900 border-b border-slate-800 p-4 flex-shrink-0">
-      <form @submit.prevent="scout()" class="max-w-7xl mx-auto">
-        <div class="flex flex-col sm:flex-row gap-3">
+        <!-- Search Form -->
+        <form @submit.prevent="scout()" class="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
             x-model="searchParams.industry"
-            placeholder="Industry (e.g., dentist, restaurant)"
-            class="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500"
+            placeholder="Business type (dentist, restaurant, salon...)"
+            class="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             required
           >
           <input
             type="text"
             x-model="searchParams.city"
-            placeholder="Location (e.g., Austin, TX)"
-            class="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500"
+            placeholder="City, State (Austin, TX)"
+            class="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             required
           >
           <button
             type="submit"
             :disabled="loadingInitial"
-            class="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg font-medium text-sm whitespace-nowrap"
+            class="px-8 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 rounded-xl font-semibold whitespace-nowrap transition-all"
           >
-            <span x-show="!loadingInitial">🔍 Search</span>
-            <span x-show="loadingInitial">Searching...</span>
+            <span x-show="!loadingInitial">🔍 Find Leads</span>
+            <span x-show="loadingInitial" class="flex items-center gap-2">
+              <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+              Searching...
+            </span>
           </button>
-        </div>
-        <!-- Error message -->
-        <div x-show="error" class="mt-2 text-red-400 text-sm" x-text="error"></div>
-      </form>
-    </div>
+        </form>
 
-    <!-- Main Content Area -->
-    <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+        <!-- Error Display -->
+        <div x-show="error" class="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm" x-text="error"></div>
+      </div>
+    </header>
 
-      <!-- Results Panel - Toggle on mobile, always visible on desktop -->
-      <aside
-        :class="{'hidden': !showResults && leads.length > 0, 'flex': showResults || leads.length === 0}"
-        class="md:flex w-full md:w-80 lg:w-96 bg-slate-900 border-r border-slate-800 flex-col overflow-hidden"
-      >
-        <!-- No results state -->
-        <div x-show="leads.length === 0 && !loadingInitial" class="flex-1 flex items-center justify-center p-8">
-          <div class="text-center text-slate-500">
-            <div class="text-4xl mb-3">🔍</div>
-            <p>Search for businesses above</p>
-          </div>
-        </div>
+    <!-- Main Content -->
+    <main class="flex-1 px-4 py-6">
+      <div class="max-w-6xl mx-auto">
 
-        <!-- Loading state -->
-        <div x-show="loadingInitial" class="flex-1 flex items-center justify-center p-8">
-          <div class="text-center text-slate-400">
-            <svg class="animate-spin h-8 w-8 mx-auto mb-3" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-            </svg>
-            <p>Searching...</p>
-          </div>
-        </div>
-
-        <!-- Results list -->
-        <div x-show="leads.length > 0" class="flex-1 overflow-y-auto mobile-scroll">
-          <div class="p-3 border-b border-slate-800 bg-slate-800/50">
-            <span class="text-sm text-slate-400" x-text="`${leads.length} businesses found`"></span>
-          </div>
-          <div class="divide-y divide-slate-800">
-            <template x-for="lead in leads" :key="lead.id">
-              <div
-                @click="selectLead(lead); showResults = false"
-                :class="selectedLead?.id === lead.id ? 'bg-indigo-900/30 border-l-2 border-l-indigo-500' : ''"
-                class="p-3 cursor-pointer hover:bg-slate-800/50 transition-colors"
-              >
-                <h4 class="font-medium text-sm text-white truncate" x-text="lead.name"></h4>
-                <p class="text-xs text-slate-400 truncate mt-0.5" x-text="lead.address"></p>
-                <div x-show="analyzingLeadId === lead.id" class="mt-1 text-xs text-indigo-400">Analyzing...</div>
-              </div>
-            </template>
-          </div>
-        </div>
-      </aside>
-
-      <!-- Map Panel -->
-      <main
-        :class="{'hidden md:flex': showResults && leads.length > 0, 'flex': !showResults || leads.length === 0}"
-        class="flex-1 md:flex flex-col min-h-[300px] md:min-h-0"
-      >
-        <!-- Map -->
-        <div class="flex-1 relative">
-          <div id="map" class="absolute inset-0"></div>
-
-          <!-- Empty overlay -->
-          <div
-            x-show="leads.length === 0 && !loadingInitial"
-            class="absolute inset-0 flex items-center justify-center bg-slate-950/90"
-          >
-            <div class="text-center p-4">
-              <div class="text-5xl mb-4">🗺️</div>
-              <h3 class="text-xl font-bold mb-1">Map View</h3>
-              <p class="text-slate-400 text-sm">Search to see business locations</p>
+        <!-- Empty State -->
+        <div x-show="leads.length === 0 && !loadingInitial" class="text-center py-16">
+          <div class="text-6xl mb-4">🏢</div>
+          <h2 class="text-2xl font-bold mb-2">Find Local Businesses</h2>
+          <p class="text-slate-400 max-w-md mx-auto">
+            Search for businesses in any industry and location. We'll analyze their digital presence and show you exactly how an AI agency can help them.
+          </p>
+          <div class="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto text-left">
+            <div class="p-4 bg-slate-900 rounded-xl border border-slate-800">
+              <div class="text-2xl mb-2">🤖</div>
+              <h3 class="font-semibold text-sm">Chatbot Gaps</h3>
+              <p class="text-xs text-slate-400">Find businesses without AI chat support</p>
+            </div>
+            <div class="p-4 bg-slate-900 rounded-xl border border-slate-800">
+              <div class="text-2xl mb-2">📅</div>
+              <h3 class="font-semibold text-sm">Booking Systems</h3>
+              <p class="text-xs text-slate-400">Identify manual booking processes</p>
+            </div>
+            <div class="p-4 bg-slate-900 rounded-xl border border-slate-800">
+              <div class="text-2xl mb-2">⭐</div>
+              <h3 class="font-semibold text-sm">Review Management</h3>
+              <p class="text-xs text-slate-400">Spot reputation opportunities</p>
             </div>
           </div>
         </div>
 
-        <!-- Selected Lead Details -->
-        <div
-          x-show="selectedLead && selectedLead.analysis"
-          x-transition
-          class="bg-slate-900 border-t border-slate-800 p-4 max-h-[50vh] overflow-y-auto"
-        >
-          <template x-if="selectedLead && selectedLead.analysis">
-            <div>
-              <div class="flex justify-between items-start mb-3">
+        <!-- Loading State -->
+        <div x-show="loadingInitial" class="text-center py-16">
+          <svg class="animate-spin h-12 w-12 mx-auto mb-4 text-indigo-500" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          <p class="text-slate-400">Searching for businesses...</p>
+        </div>
+
+        <!-- Results Header -->
+        <div x-show="leads.length > 0" class="mb-6 flex items-center justify-between">
+          <h2 class="text-lg font-semibold">
+            <span x-text="leads.length"></span> Businesses Found
+          </h2>
+          <p class="text-sm text-slate-400">Click a business to analyze AI opportunities</p>
+        </div>
+
+        <!-- Results Grid -->
+        <div x-show="leads.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <template x-for="lead in leads" :key="lead.id">
+            <div
+              @click="selectLead(lead)"
+              :class="selectedLead?.id === lead.id ? 'ring-2 ring-indigo-500 bg-slate-800' : 'bg-slate-900 hover:bg-slate-800'"
+              class="p-4 rounded-xl border border-slate-800 cursor-pointer transition-all"
+            >
+              <!-- Business Header -->
+              <div class="flex items-start justify-between mb-3">
                 <div class="flex-1 min-w-0">
-                  <h3 class="font-bold text-lg truncate" x-text="selectedLead.name"></h3>
-                  <p class="text-sm text-slate-400 truncate" x-text="selectedLead.address"></p>
+                  <h3 class="font-semibold text-white truncate" x-text="lead.name"></h3>
+                  <p class="text-xs text-slate-400 truncate" x-text="lead.address"></p>
                 </div>
-                <button @click="selectedLead = null" class="text-slate-400 hover:text-white ml-2">✕</button>
+                <div x-show="lead.analysis" class="ml-2">
+                  <span
+                    :class="{
+                      'bg-red-500/20 text-red-400': lead.analysis?.opportunityScore === 'HIGH',
+                      'bg-yellow-500/20 text-yellow-400': lead.analysis?.opportunityScore === 'MEDIUM',
+                      'bg-green-500/20 text-green-400': lead.analysis?.opportunityScore === 'LOW'
+                    }"
+                    class="px-2 py-1 rounded-lg text-xs font-medium"
+                    x-text="lead.analysis?.opportunityScore"
+                  ></span>
+                </div>
               </div>
 
-              <div class="space-y-3">
+              <!-- Analyzing State -->
+              <div x-show="analyzingLeadId === lead.id" class="flex items-center gap-2 text-indigo-400 text-sm py-2">
+                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                Analyzing with AI...
+              </div>
+
+              <!-- Analysis Results -->
+              <div x-show="lead.analysis && analyzingLeadId !== lead.id" class="space-y-3">
+                <!-- Key Gaps -->
                 <div>
-                  <h4 class="text-xs font-medium text-slate-300 mb-1">Opportunities</h4>
+                  <p class="text-xs text-slate-500 mb-1">AI Opportunities:</p>
                   <div class="flex flex-wrap gap-1">
-                    <template x-for="gap in selectedLead.analysis.keyGaps" :key="gap">
-                      <span class="px-2 py-0.5 bg-red-500/20 text-red-300 text-xs rounded" x-text="gap"></span>
+                    <template x-for="gap in (lead.analysis?.keyGaps || []).slice(0, 3)" :key="gap">
+                      <span class="px-2 py-0.5 bg-red-500/10 text-red-400 text-xs rounded-full" x-text="gap"></span>
                     </template>
                   </div>
                 </div>
 
-                <div>
-                  <h4 class="text-xs font-medium text-slate-300 mb-1">Pitch</h4>
-                  <p class="text-sm text-slate-300 bg-slate-800 p-3 rounded-lg" x-text="selectedLead.analysis.aiAuditPitch"></p>
-                  <button
-                    @click="copyPitch()"
-                    class="mt-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded text-xs font-medium"
-                  >📋 Copy Pitch</button>
-                </div>
+                <!-- Summary -->
+                <p class="text-xs text-slate-400 line-clamp-2" x-text="lead.analysis?.digitalPresenceSummary"></p>
+
+                <!-- CTA -->
+                <button
+                  @click.stop="showPitchModal(lead)"
+                  class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium transition-colors"
+                >
+                  📋 View AI Agency Pitch
+                </button>
+              </div>
+
+              <!-- Not Analyzed Yet -->
+              <div x-show="!lead.analysis && analyzingLeadId !== lead.id" class="text-center py-4">
+                <p class="text-xs text-slate-500">Click to analyze AI opportunities</p>
               </div>
             </div>
           </template>
         </div>
-      </main>
+      </div>
+    </main>
+
+    <!-- Pitch Modal -->
+    <div
+      x-show="pitchModalLead"
+      x-transition:enter="transition ease-out duration-200"
+      x-transition:enter-start="opacity-0"
+      x-transition:enter-end="opacity-100"
+      x-transition:leave="transition ease-in duration-150"
+      x-transition:leave-start="opacity-100"
+      x-transition:leave-end="opacity-0"
+      class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50"
+      @click.self="pitchModalLead = null"
+    >
+      <div
+        x-show="pitchModalLead"
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 scale-95"
+        x-transition:enter-end="opacity-100 scale-100"
+        class="bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+      >
+        <template x-if="pitchModalLead">
+          <div>
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-slate-800">
+              <div class="flex items-start justify-between">
+                <div>
+                  <h2 class="text-xl font-bold" x-text="pitchModalLead.name"></h2>
+                  <p class="text-sm text-slate-400" x-text="pitchModalLead.address"></p>
+                </div>
+                <button @click="pitchModalLead = null" class="text-slate-400 hover:text-white text-2xl">&times;</button>
+              </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 space-y-6">
+              <!-- Opportunity Score -->
+              <div class="flex items-center gap-3">
+                <span class="text-sm text-slate-400">Opportunity Score:</span>
+                <span
+                  :class="{
+                    'bg-red-500/20 text-red-400 border-red-500/30': pitchModalLead.analysis?.opportunityScore === 'HIGH',
+                    'bg-yellow-500/20 text-yellow-400 border-yellow-500/30': pitchModalLead.analysis?.opportunityScore === 'MEDIUM',
+                    'bg-green-500/20 text-green-400 border-green-500/30': pitchModalLead.analysis?.opportunityScore === 'LOW'
+                  }"
+                  class="px-3 py-1 rounded-full text-sm font-semibold border"
+                  x-text="pitchModalLead.analysis?.opportunityScore + ' PRIORITY'"
+                ></span>
+              </div>
+
+              <!-- Key Gaps -->
+              <div>
+                <h3 class="text-sm font-semibold text-slate-300 mb-2">🎯 AI & Automation Opportunities</h3>
+                <div class="flex flex-wrap gap-2">
+                  <template x-for="gap in pitchModalLead.analysis?.keyGaps" :key="gap">
+                    <span class="px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg" x-text="gap"></span>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Digital Presence Summary -->
+              <div>
+                <h3 class="text-sm font-semibold text-slate-300 mb-2">📊 Digital Presence Analysis</h3>
+                <p class="text-slate-400 text-sm leading-relaxed" x-text="pitchModalLead.analysis?.digitalPresenceSummary"></p>
+              </div>
+
+              <!-- AI Agency Pitch -->
+              <div>
+                <h3 class="text-sm font-semibold text-slate-300 mb-2">💼 AI Agency Sales Pitch</h3>
+                <div class="bg-slate-800 rounded-xl p-4">
+                  <p class="text-slate-200 text-sm leading-relaxed whitespace-pre-line" x-text="pitchModalLead.analysis?.aiAuditPitch"></p>
+                </div>
+              </div>
+
+              <!-- Actions -->
+              <div class="flex flex-wrap gap-3 pt-4 border-t border-slate-800">
+                <button
+                  @click="copyPitch(pitchModalLead)"
+                  class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium transition-colors"
+                >
+                  📋 Copy Pitch to Clipboard
+                </button>
+                <a
+                  :href="pitchModalLead.websiteUrl || `https://google.com/search?q=${encodeURIComponent(pitchModalLead.name + ' ' + pitchModalLead.address)}`"
+                  target="_blank"
+                  class="py-3 px-6 bg-slate-800 hover:bg-slate-700 rounded-xl font-medium transition-colors"
+                >
+                  🌐 Visit Website
+                </a>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
     </div>
+
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
