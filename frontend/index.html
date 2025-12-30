@@ -3,265 +3,268 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LeadGenius - AI Lead Generation Command Center</title>
+  <title>LeadGenius - AI Agency Lead Finder</title>
   <link rel="stylesheet" href="/src/styles/main.css">
-  <!-- Leaflet CSS for maps (free, no API key needed) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans antialiased">
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen">
 
-  <div id="app" x-data="scoutApp()" class="h-screen flex flex-col">
+  <div id="app" x-data="scoutApp()" class="min-h-screen flex flex-col">
 
     <!-- Header -->
-    <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 md:px-6 md:py-4">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2 md:gap-3">
-          <div class="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center">
-            <span class="text-lg md:text-xl font-bold">🎯</span>
-          </div>
+    <header class="bg-slate-900 border-b border-slate-800 px-4 py-4">
+      <div class="max-w-6xl mx-auto">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center text-xl">🎯</div>
           <div>
-            <h1 class="text-base md:text-xl font-bold text-slate-100">LeadGenius</h1>
-            <p class="text-xs md:text-sm text-slate-400 hidden sm:block">AI-Powered Lead Generation</p>
+            <h1 class="text-xl font-bold">LeadGenius</h1>
+            <p class="text-xs text-slate-400">Find SMBs that need AI & Automation</p>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <!-- Mobile menu toggle -->
-          <button
-            @click="showSidebar = !showSidebar"
-            class="md:hidden px-3 py-2 text-sm bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+
+        <!-- Search Form -->
+        <form @submit.prevent="scout()" class="flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            x-model="searchParams.industry"
+            placeholder="Business type (dentist, restaurant, salon...)"
+            class="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            required
           >
-            <span x-show="!showSidebar">Menu</span>
-            <span x-show="showSidebar">Close</span>
-          </button>
-          <button
-            @click="checkHealth()"
-            class="hidden sm:block px-4 py-2 text-sm bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+          <input
+            type="text"
+            x-model="searchParams.city"
+            placeholder="City, State (Austin, TX)"
+            class="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            required
           >
-            Status
+          <button
+            type="submit"
+            :disabled="loadingInitial"
+            class="px-8 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 rounded-xl font-semibold whitespace-nowrap transition-all"
+          >
+            <span x-show="!loadingInitial">🔍 Find Leads</span>
+            <span x-show="loadingInitial" class="flex items-center gap-2">
+              <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+              Searching...
+            </span>
           </button>
-        </div>
+        </form>
+
+        <!-- Error Display -->
+        <div x-show="error" class="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm" x-text="error"></div>
       </div>
     </header>
 
-    <!-- Main Content - Mobile: stacked, Desktop: side-by-side -->
-    <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+    <!-- Main Content -->
+    <main class="flex-1 px-4 py-6">
+      <div class="max-w-6xl mx-auto">
 
-      <!-- Sidebar - Control Panel -->
-      <aside
-        :class="showSidebar ? 'flex' : 'hidden md:flex'"
-        class="w-full md:w-80 lg:w-96 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex-col max-h-[50vh] md:max-h-full overflow-hidden"
-      >
-
-        <!-- Search Form -->
-        <div class="p-4 md:p-6 border-b border-slate-800">
-          <h2 class="text-base md:text-lg font-semibold mb-3 md:mb-4">Scout Parameters</h2>
-
-          <form @submit.prevent="scout(); showSidebar = false" class="space-y-3 md:space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-1 md:mb-2">Industry</label>
-              <input
-                type="text"
-                x-model="searchParams.industry"
-                placeholder="e.g., dentist, pizza restaurant"
-                class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm md:text-base"
-                required
-              >
+        <!-- Empty State -->
+        <div x-show="leads.length === 0 && !loadingInitial" class="text-center py-16">
+          <div class="text-6xl mb-4">🏢</div>
+          <h2 class="text-2xl font-bold mb-2">Find Local Businesses</h2>
+          <p class="text-slate-400 max-w-md mx-auto">
+            Search for businesses in any industry and location. We'll analyze their digital presence and show you exactly how an AI agency can help them.
+          </p>
+          <div class="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto text-left">
+            <div class="p-4 bg-slate-900 rounded-xl border border-slate-800">
+              <div class="text-2xl mb-2">🤖</div>
+              <h3 class="font-semibold text-sm">Chatbot Gaps</h3>
+              <p class="text-xs text-slate-400">Find businesses without AI chat support</p>
             </div>
-
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-1 md:mb-2">Location</label>
-              <input
-                type="text"
-                x-model="searchParams.city"
-                placeholder="e.g., Austin, TX"
-                class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm md:text-base"
-                required
-              >
+            <div class="p-4 bg-slate-900 rounded-xl border border-slate-800">
+              <div class="text-2xl mb-2">📅</div>
+              <h3 class="font-semibold text-sm">Booking Systems</h3>
+              <p class="text-xs text-slate-400">Identify manual booking processes</p>
             </div>
+            <div class="p-4 bg-slate-900 rounded-xl border border-slate-800">
+              <div class="text-2xl mb-2">⭐</div>
+              <h3 class="font-semibold text-sm">Review Management</h3>
+              <p class="text-xs text-slate-400">Spot reputation opportunities</p>
+            </div>
+          </div>
+        </div>
 
-            <button
-              type="submit"
-              :disabled="loadingInitial"
-              class="w-full py-2.5 md:py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold transition-all transform hover:scale-[1.02] active:scale-[0.98] text-sm md:text-base"
+        <!-- Loading State -->
+        <div x-show="loadingInitial" class="text-center py-16">
+          <svg class="animate-spin h-12 w-12 mx-auto mb-4 text-indigo-500" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          <p class="text-slate-400">Searching for businesses...</p>
+        </div>
+
+        <!-- Results Header -->
+        <div x-show="leads.length > 0" class="mb-6 flex items-center justify-between">
+          <h2 class="text-lg font-semibold">
+            <span x-text="leads.length"></span> Businesses Found
+          </h2>
+          <p class="text-sm text-slate-400">Click a business to analyze AI opportunities</p>
+        </div>
+
+        <!-- Results Grid -->
+        <div x-show="leads.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <template x-for="lead in leads" :key="lead.id">
+            <div
+              @click="selectLead(lead)"
+              :class="selectedLead?.id === lead.id ? 'ring-2 ring-indigo-500 bg-slate-800' : 'bg-slate-900 hover:bg-slate-800'"
+              class="p-4 rounded-xl border border-slate-800 cursor-pointer transition-all"
             >
-              <span x-show="!loadingInitial">🔍 Scout Leads</span>
-              <span x-show="loadingInitial" class="flex items-center justify-center gap-2">
-                <svg class="animate-spin h-4 w-4 md:h-5 md:w-5" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Scouting...
-              </span>
-            </button>
-          </form>
-        </div>
-
-        <!-- Filters (shown after search) -->
-        <div x-show="leads.length > 0" class="p-4 md:p-6 border-b border-slate-800 space-y-3">
-          <h3 class="text-sm font-semibold text-slate-300">🎯 Filters</h3>
-
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" x-model="filters.requireMissingChatbot" class="rounded bg-slate-800 border-slate-600">
-            <span class="text-sm text-slate-300">Missing AI Chatbot</span>
-          </label>
-
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" x-model="filters.requireManualBooking" class="rounded bg-slate-800 border-slate-600">
-            <span class="text-sm text-slate-300">Manual Booking Only</span>
-          </label>
-        </div>
-
-        <!-- Results List -->
-        <div class="flex-1 overflow-y-auto p-4 md:p-6">
-          <div x-show="leads.length === 0 && !loadingInitial" class="text-center text-slate-400 py-8 md:py-12">
-            <svg class="w-12 h-12 md:w-16 md:h-16 mx-auto mb-3 md:mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-            </svg>
-            <p class="text-sm md:text-base">Enter search parameters to begin</p>
-          </div>
-
-          <div x-show="leads.length > 0" class="mb-3 md:mb-4 flex items-center justify-between">
-            <span class="text-sm text-slate-400">
-              <span x-text="filteredLeads().length"></span> Found
-            </span>
-          </div>
-
-          <div class="space-y-2 md:space-y-3">
-            <template x-for="lead in filteredLeads()" :key="lead.id">
-              <div
-                @click="selectLead(lead); showSidebar = false"
-                :class="selectedLead?.id === lead.id ? 'bg-slate-800 border-indigo-500' : 'bg-slate-900/50 border-slate-800'"
-                class="border rounded-lg p-3 md:p-4 cursor-pointer hover:bg-slate-800 transition-all"
-              >
-                <div class="flex items-start justify-between mb-1 md:mb-2">
-                  <h4 class="font-semibold text-slate-100 text-sm md:text-base line-clamp-1" x-text="lead.name"></h4>
+              <!-- Business Header -->
+              <div class="flex items-start justify-between mb-3">
+                <div class="flex-1 min-w-0">
+                  <h3 class="font-semibold text-white truncate" x-text="lead.name"></h3>
+                  <p class="text-xs text-slate-400 truncate" x-text="lead.address"></p>
+                </div>
+                <div x-show="lead.analysis" class="ml-2">
                   <span
-                    x-show="lead.analysis"
                     :class="{
-                      'bg-red-500/20 text-red-300': lead.analysis?.opportunityScore === 'HIGH',
-                      'bg-yellow-500/20 text-yellow-300': lead.analysis?.opportunityScore === 'MEDIUM',
-                      'bg-green-500/20 text-green-300': lead.analysis?.opportunityScore === 'LOW'
+                      'bg-red-500/20 text-red-400': lead.analysis?.opportunityScore === 'HIGH',
+                      'bg-yellow-500/20 text-yellow-400': lead.analysis?.opportunityScore === 'MEDIUM',
+                      'bg-green-500/20 text-green-400': lead.analysis?.opportunityScore === 'LOW'
                     }"
-                    class="px-2 py-0.5 rounded text-xs font-medium ml-2 flex-shrink-0"
+                    class="px-2 py-1 rounded-lg text-xs font-medium"
                     x-text="lead.analysis?.opportunityScore"
                   ></span>
                 </div>
-
-                <p class="text-xs md:text-sm text-slate-400 mb-1 md:mb-2 line-clamp-1" x-text="lead.address"></p>
-
-                <div class="flex items-center gap-2 md:gap-3 text-xs md:text-sm">
-                  <span class="flex items-center gap-1">
-                    <span class="text-yellow-400">★</span>
-                    <span x-text="lead.rating || 'N/A'"></span>
-                  </span>
-                  <span class="text-slate-500">•</span>
-                  <span class="text-slate-400" x-text="`${lead.reviewCount || 0} reviews`"></span>
-                </div>
-
-                <div x-show="analyzingLeadId === lead.id" class="mt-2 md:mt-3 flex items-center gap-2 text-xs md:text-sm text-indigo-400">
-                  <svg class="animate-spin h-3 w-3 md:h-4 md:w-4" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Analyzing...
-                </div>
-              </div>
-            </template>
-          </div>
-        </div>
-      </aside>
-
-      <!-- Right Panel - Map & Details -->
-      <main class="flex-1 flex flex-col min-h-0">
-
-        <!-- Map Container -->
-        <div class="flex-1 relative min-h-[200px]">
-          <div id="map" class="w-full h-full"></div>
-
-          <!-- Empty State Overlay -->
-          <div
-            x-show="leads.length === 0 && !loadingInitial"
-            class="absolute inset-0 flex items-center justify-center bg-slate-950/95 backdrop-blur-sm"
-          >
-            <div class="text-center px-4">
-              <div class="w-16 h-16 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 bg-gradient-to-br from-indigo-500/20 to-violet-600/20 rounded-2xl flex items-center justify-center">
-                <span class="text-3xl md:text-5xl">🎯</span>
-              </div>
-              <h3 class="text-xl md:text-2xl font-bold mb-2">Ready to Scout</h3>
-              <p class="text-slate-400 text-sm md:text-base">Enter search parameters to discover leads</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Detail Panel (Selected Lead) -->
-        <div
-          x-show="selectedLead && selectedLead.analysis"
-          x-transition
-          class="max-h-[40vh] md:h-1/3 bg-slate-900 border-t border-slate-800 overflow-y-auto p-4 md:p-6"
-        >
-          <template x-if="selectedLead && selectedLead.analysis">
-            <div>
-              <div class="flex items-start justify-between mb-3 md:mb-4">
-                <div class="flex-1 min-w-0 mr-2">
-                  <h3 class="text-lg md:text-xl font-bold truncate" x-text="selectedLead.name"></h3>
-                  <p class="text-xs md:text-sm text-slate-400 truncate" x-text="selectedLead.address"></p>
-                </div>
-                <button
-                  @click="selectedLead = null"
-                  class="text-slate-400 hover:text-slate-300 flex-shrink-0"
-                >
-                  <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                  </svg>
-                </button>
               </div>
 
-              <div class="space-y-3 md:space-y-4">
+              <!-- Analyzing State -->
+              <div x-show="analyzingLeadId === lead.id" class="flex items-center gap-2 text-indigo-400 text-sm py-2">
+                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                Analyzing with AI...
+              </div>
+
+              <!-- Analysis Results -->
+              <div x-show="lead.analysis && analyzingLeadId !== lead.id" class="space-y-3">
+                <!-- Key Gaps -->
                 <div>
-                  <h4 class="text-xs md:text-sm font-semibold text-slate-300 mb-1 md:mb-2">Key Gaps</h4>
-                  <div class="flex flex-wrap gap-1.5 md:gap-2">
-                    <template x-for="gap in selectedLead.analysis.keyGaps" :key="gap">
-                      <span class="px-2 md:px-3 py-0.5 md:py-1 bg-red-500/10 border border-red-500/20 text-red-300 text-xs md:text-sm rounded-full" x-text="gap"></span>
+                  <p class="text-xs text-slate-500 mb-1">AI Opportunities:</p>
+                  <div class="flex flex-wrap gap-1">
+                    <template x-for="gap in (lead.analysis?.keyGaps || []).slice(0, 3)" :key="gap">
+                      <span class="px-2 py-0.5 bg-red-500/10 text-red-400 text-xs rounded-full" x-text="gap"></span>
                     </template>
                   </div>
                 </div>
 
-                <div>
-                  <h4 class="text-xs md:text-sm font-semibold text-slate-300 mb-1 md:mb-2">Digital Presence</h4>
-                  <p class="text-xs md:text-sm text-slate-400" x-text="selectedLead.analysis.digitalPresenceSummary"></p>
-                </div>
+                <!-- Summary -->
+                <p class="text-xs text-slate-400 line-clamp-2" x-text="lead.analysis?.digitalPresenceSummary"></p>
 
-                <div>
-                  <h4 class="text-xs md:text-sm font-semibold text-slate-300 mb-1 md:mb-2">AI Audit Pitch</h4>
-                  <div class="p-3 md:p-4 bg-slate-800 rounded-lg">
-                    <p class="text-xs md:text-sm text-slate-300 leading-relaxed" x-text="selectedLead.analysis.aiAuditPitch"></p>
-                    <div class="flex flex-wrap gap-2 mt-3 md:mt-4">
-                      <button
-                        @click="copyPitch()"
-                        class="px-3 md:px-4 py-1.5 md:py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs md:text-sm font-medium transition-colors"
-                      >
-                        📋 Copy Pitch
-                      </button>
-                      <a
-                        :href="selectedLead.mapsUrl"
-                        target="_blank"
-                        class="px-3 md:px-4 py-1.5 md:py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs md:text-sm font-medium transition-colors"
-                      >
-                        📍 View Map
-                      </a>
-                    </div>
-                  </div>
-                </div>
+                <!-- CTA -->
+                <button
+                  @click.stop="showPitchModal(lead)"
+                  class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium transition-colors"
+                >
+                  📋 View AI Agency Pitch
+                </button>
+              </div>
+
+              <!-- Not Analyzed Yet -->
+              <div x-show="!lead.analysis && analyzingLeadId !== lead.id" class="text-center py-4">
+                <p class="text-xs text-slate-500">Click to analyze AI opportunities</p>
               </div>
             </div>
           </template>
         </div>
-      </main>
+      </div>
+    </main>
+
+    <!-- Pitch Modal -->
+    <div
+      x-show="pitchModalLead"
+      x-transition:enter="transition ease-out duration-200"
+      x-transition:enter-start="opacity-0"
+      x-transition:enter-end="opacity-100"
+      x-transition:leave="transition ease-in duration-150"
+      x-transition:leave-start="opacity-100"
+      x-transition:leave-end="opacity-0"
+      class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50"
+      @click.self="pitchModalLead = null"
+    >
+      <div
+        x-show="pitchModalLead"
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 scale-95"
+        x-transition:enter-end="opacity-100 scale-100"
+        class="bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+      >
+        <template x-if="pitchModalLead">
+          <div>
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-slate-800">
+              <div class="flex items-start justify-between">
+                <div>
+                  <h2 class="text-xl font-bold" x-text="pitchModalLead.name"></h2>
+                  <p class="text-sm text-slate-400" x-text="pitchModalLead.address"></p>
+                </div>
+                <button @click="pitchModalLead = null" class="text-slate-400 hover:text-white text-2xl">&times;</button>
+              </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 space-y-6">
+              <!-- Opportunity Score -->
+              <div class="flex items-center gap-3">
+                <span class="text-sm text-slate-400">Opportunity Score:</span>
+                <span
+                  :class="{
+                    'bg-red-500/20 text-red-400 border-red-500/30': pitchModalLead.analysis?.opportunityScore === 'HIGH',
+                    'bg-yellow-500/20 text-yellow-400 border-yellow-500/30': pitchModalLead.analysis?.opportunityScore === 'MEDIUM',
+                    'bg-green-500/20 text-green-400 border-green-500/30': pitchModalLead.analysis?.opportunityScore === 'LOW'
+                  }"
+                  class="px-3 py-1 rounded-full text-sm font-semibold border"
+                  x-text="pitchModalLead.analysis?.opportunityScore + ' PRIORITY'"
+                ></span>
+              </div>
+
+              <!-- Key Gaps -->
+              <div>
+                <h3 class="text-sm font-semibold text-slate-300 mb-2">🎯 AI & Automation Opportunities</h3>
+                <div class="flex flex-wrap gap-2">
+                  <template x-for="gap in pitchModalLead.analysis?.keyGaps" :key="gap">
+                    <span class="px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg" x-text="gap"></span>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Digital Presence Summary -->
+              <div>
+                <h3 class="text-sm font-semibold text-slate-300 mb-2">📊 Digital Presence Analysis</h3>
+                <p class="text-slate-400 text-sm leading-relaxed" x-text="pitchModalLead.analysis?.digitalPresenceSummary"></p>
+              </div>
+
+              <!-- AI Agency Pitch -->
+              <div>
+                <h3 class="text-sm font-semibold text-slate-300 mb-2">💼 AI Agency Sales Pitch</h3>
+                <div class="bg-slate-800 rounded-xl p-4">
+                  <p class="text-slate-200 text-sm leading-relaxed whitespace-pre-line" x-text="pitchModalLead.analysis?.aiAuditPitch"></p>
+                </div>
+              </div>
+
+              <!-- Actions -->
+              <div class="flex flex-wrap gap-3 pt-4 border-t border-slate-800">
+                <button
+                  @click="copyPitch(pitchModalLead)"
+                  class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium transition-colors"
+                >
+                  📋 Copy Pitch to Clipboard
+                </button>
+                <a
+                  :href="pitchModalLead.websiteUrl || `https://google.com/search?q=${encodeURIComponent(pitchModalLead.name + ' ' + pitchModalLead.address)}`"
+                  target="_blank"
+                  class="py-3 px-6 bg-slate-800 hover:bg-slate-700 rounded-xl font-medium transition-colors"
+                >
+                  🌐 Visit Website
+                </a>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
     </div>
+
   </div>
 
-  <!-- Leaflet JS (free, no API key needed) -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
