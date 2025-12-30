@@ -1,12 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getPlaceDetails } from '../../../lib/services/places';
-import { analyzeBusinessOpportunity } from '../../../lib/services/gemini';
-import { fetchWebsite } from '../../../lib/services/scraper';
-import { analyzeChatbot } from '../../../lib/analyzers/chatbot';
-import { analyzeBooking } from '../../../lib/analyzers/booking';
-import { analyzeSentiment } from '../../../lib/analyzers/sentiment';
-import { analyzeSEO } from '../../../lib/analyzers/seo';
-import { AnalysisResponse } from '../../../lib/types';
+import { analyzeBusinessComprehensive } from '../../../lib/services/gemini';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
@@ -23,64 +16,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { id: placeId } = req.query;
+    // Get business info from request body
+    const { name, address, industry, phone } = req.body;
 
-    if (!placeId || typeof placeId !== 'string') {
-      return res.status(400).json({ error: 'Place ID is required' });
+    if (!name || !address) {
+      return res.status(400).json({ error: 'Business name and address are required' });
     }
 
-    // Get place details
-    const place = await getPlaceDetails(placeId);
+    console.log('Analyzing business:', name);
 
-    // Fetch website HTML if available
-    let websiteHtml: string | null = null;
-    if (place.website) {
-      websiteHtml = await fetchWebsite(place.website);
-    }
-
-    // Run analyzers in parallel
-    const [chatbot, booking, sentiment, seo] = await Promise.all([
-      Promise.resolve(analyzeChatbot(websiteHtml)),
-      Promise.resolve(analyzeBooking(websiteHtml)),
-      Promise.resolve(analyzeSentiment(place.reviews)),
-      Promise.resolve(analyzeSEO(websiteHtml)),
-    ]);
-
-    // Build UX gaps list
-    const uxGaps: string[] = [];
-    if (!chatbot.hasChatbot) uxGaps.push('No AI chatbot for customer support');
-    if (!booking.hasBooking) uxGaps.push('No online booking system');
-    if (seo.gaps.length > 0) uxGaps.push(...seo.gaps.slice(0, 2));
-
-    // Call Gemini for AI analysis
-    const aiAnalysis = await analyzeBusinessOpportunity({
-      name: place.name,
-      industry: place.types?.[0] || 'business',
-      city: place.formatted_address,
-      rating: place.rating || 3.5,
-      reviewCount: place.user_ratings_total || 0,
-      recentReviews: place.reviews?.slice(0, 3).map((r) => r.text) || [],
-      websiteHtml,
-      hasChatbot: chatbot.hasChatbot,
-      hasOnlineBooking: booking.hasBooking,
-      uxGaps,
-      googleSearchResults: [],
+    // Call Gemini for comprehensive AI analysis
+    const analysis = await analyzeBusinessComprehensive({
+      name,
+      address,
+      industry: industry || 'Local Business',
+      phone,
     });
 
-    const response: AnalysisResponse = {
-      placeId,
-      analysis: aiAnalysis,
-      technicalDetails: {
-        chatbot,
-        booking,
-        sentiment,
-        seo,
-      },
-    };
+    console.log('Analysis complete for:', name);
 
-    return res.status(200).json({ ...response, cached: false });
+    return res.status(200).json({ analysis });
   } catch (error) {
     console.error('Analysis error:', error);
-    return res.status(500).json({ error: 'Analysis failed' });
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : 'Analysis failed',
+    });
   }
 }

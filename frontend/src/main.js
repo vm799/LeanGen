@@ -16,7 +16,8 @@ document.addEventListener('alpine:init', () => {
     loadingInitial: false,
     analyzingLeadId: null,
     error: null,
-    pitchModalLead: null, // For the pitch modal
+    insightsModal: null, // For the insights modal
+    activeTab: 'overview', // Tab state for modal
 
     // Initialize
     init() {
@@ -58,89 +59,134 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    // Select lead and trigger analysis
-    async selectLead(lead) {
-      this.selectedLead = lead;
+    // Analyze a lead and show modal
+    async analyzeLead(lead) {
+      this.analyzingLeadId = lead.id;
 
-      // If not analyzed yet, trigger analysis
-      if (!lead.analysis) {
-        await this.analyzeLeadDeep(lead.id);
+      // If already analyzed, just show modal
+      if (lead.analysis) {
+        this.insightsModal = lead;
+        this.activeTab = 'overview';
+        this.analyzingLeadId = null;
+        return;
       }
-    },
-
-    // Deep analysis for selected lead
-    async analyzeLeadDeep(leadId) {
-      this.analyzingLeadId = leadId;
 
       try {
-        const response = await fetch(`/api/leads/${leadId}/analyze`, {
+        const response = await fetch(`/api/leads/${lead.id}/analyze`, {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: lead.name,
+            address: lead.address,
+            industry: lead.category || this.searchParams.industry,
+            phone: lead.phone,
+          }),
         });
 
         if (!response.ok) {
-          throw new Error('Analysis failed');
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || 'Analysis failed');
         }
 
         const data = await response.json();
 
-        // Update the lead in our list
-        const leadIndex = this.leads.findIndex((l) => l.id === leadId);
+        // Update the lead with analysis
+        const leadIndex = this.leads.findIndex((l) => l.id === lead.id);
         if (leadIndex !== -1) {
           this.leads[leadIndex].analysis = data.analysis;
-          this.leads[leadIndex].technicalDetails = data.technicalDetails;
-
-          // Update selected lead
-          if (this.selectedLead?.id === leadId) {
-            this.selectedLead = this.leads[leadIndex];
-          }
+          this.leads[leadIndex].analyzed = true;
         }
+
+        // Show the modal
+        this.insightsModal = this.leads[leadIndex] || { ...lead, analysis: data.analysis };
+        this.activeTab = 'overview';
       } catch (error) {
         console.error('Analysis error:', error);
+        this.error = error.message || 'Analysis failed';
       } finally {
         this.analyzingLeadId = null;
       }
     },
 
-    // Show pitch modal
-    showPitchModal(lead) {
-      this.pitchModalLead = lead;
+    // Close modal
+    closeModal() {
+      this.insightsModal = null;
+      this.activeTab = 'overview';
     },
 
-    // Copy pitch to clipboard
-    async copyPitch(lead) {
-      const pitchLead = lead || this.pitchModalLead;
-      if (!pitchLead?.analysis?.aiAuditPitch) return;
+    // Copy email to clipboard
+    async copyEmail() {
+      if (!this.insightsModal?.analysis?.draftEmail) return;
 
-      const fullPitch = `
-Business: ${pitchLead.name}
-Address: ${pitchLead.address}
-
-Opportunity Score: ${pitchLead.analysis.opportunityScore}
-
-Key Gaps:
-${pitchLead.analysis.keyGaps.map(g => `• ${g}`).join('\n')}
-
-Digital Presence:
-${pitchLead.analysis.digitalPresenceSummary}
-
-Pitch:
-${pitchLead.analysis.aiAuditPitch}
-      `.trim();
+      const email = this.insightsModal.analysis.draftEmail;
 
       try {
-        await navigator.clipboard.writeText(fullPitch);
-        alert('Pitch copied to clipboard!');
+        await navigator.clipboard.writeText(email);
+        alert('Email copied to clipboard!');
       } catch (error) {
-        // Fallback for mobile
         const textarea = document.createElement('textarea');
-        textarea.value = fullPitch;
+        textarea.value = email;
         textarea.style.position = 'fixed';
         textarea.style.opacity = '0';
         document.body.appendChild(textarea);
         textarea.select();
         document.execCommand('copy');
         document.body.removeChild(textarea);
-        alert('Pitch copied!');
+        alert('Email copied!');
+      }
+    },
+
+    // Copy all insights
+    async copyAllInsights() {
+      if (!this.insightsModal?.analysis) return;
+      const a = this.insightsModal.analysis;
+      const lead = this.insightsModal;
+
+      const text = `
+=== AI INSIGHTS FOR ${lead.name.toUpperCase()} ===
+Address: ${lead.address}
+Opportunity Score: ${a.opportunityScore}
+
+📋 SUMMARY
+${a.summary}
+
+🌐 WEBSITE RECOMMENDATIONS
+${a.websiteRecommendations?.map(r => `• ${r}`).join('\n') || 'None'}
+
+📱 SOCIAL MEDIA RECOMMENDATIONS
+${a.socialMediaRecommendations?.map(r => `• ${r}`).join('\n') || 'None'}
+
+⚙️ SERVICE OPTIMIZATIONS
+${a.serviceOptimizations?.map(r => `• ${r}`).join('\n') || 'None'}
+
+🤖 AI & AUTOMATION OPPORTUNITIES
+${a.aiAutomationOpportunities?.map(r => `• ${r}`).join('\n') || 'None'}
+
+⚡ QUICK WINS
+${a.quickWins?.map(r => `• ${r}`).join('\n') || 'None'}
+
+📈 LONG-TERM STRATEGY
+${a.longTermStrategy || 'None'}
+
+👤 ESTIMATED CONTACT: ${a.estimatedContactName || 'Business Owner'}
+
+📧 DRAFT EMAIL
+${a.draftEmail}
+      `.trim();
+
+      try {
+        await navigator.clipboard.writeText(text);
+        alert('All insights copied!');
+      } catch (error) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        alert('Insights copied!');
       }
     },
   }));
