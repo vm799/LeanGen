@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LeadGenius - AI Agency Lead Finder</title>
   <meta name="version" content="3.0.0">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+  <link rel="icon" type="image/svg+xml"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
   <link rel="stylesheet" href="/src/styles/main.css">
 </head>
+
 <body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen">
 
   <div id="app" x-data="scoutApp()" class="min-h-screen flex flex-col">
@@ -15,50 +18,66 @@
     <!-- Header -->
     <header class="bg-slate-900 border-b border-slate-800 px-4 py-4">
       <div class="max-w-6xl mx-auto">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center text-xl">🎯</div>
-          <div>
-            <h1 class="text-xl font-bold">LeadGenius</h1>
-            <p class="text-xs text-slate-400">Find SMBs that need AI & Automation</p>
+        <div class="flex items-center gap-3 mb-4 justify-between">
+          <div class="flex items-center gap-3">
+            <div
+              class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center text-xl">
+              🎯</div>
+            <div>
+              <h1 class="text-xl font-bold" x-text="branding.name">LeadGenius</h1>
+              <p class="text-xs text-slate-400">Find SMBs that need AI & Automation</p>
+            </div>
           </div>
+          <!-- User Button Mount Point -->
+          <div id="user-button"></div>
+          <button x-show="!user && isLoaded" @click="login()"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors">Sign
+            In</button>
         </div>
 
-        <!-- Search Form -->
-        <form @submit.prevent="scout()" class="flex flex-col sm:flex-row gap-3">
-          <input
-            type="text"
-            x-model="searchParams.industry"
-            placeholder="Business type (dentist, restaurant, salon...)"
-            class="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            required
-          >
-          <input
-            type="text"
-            x-model="searchParams.city"
-            placeholder="City, State (Austin, TX)"
-            class="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            required
-          >
-          <button
-            type="submit"
-            :disabled="loadingInitial"
-            class="px-8 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 rounded-xl font-semibold whitespace-nowrap transition-all"
-          >
-            <span x-show="!loadingInitial">🔍 Find Leads</span>
-            <span x-show="loadingInitial" class="flex items-center gap-2">
-              <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-              Searching...
-            </span>
+        <!-- Auth Gate: Only show search if logged in -->
+        <template x-if="user">
+          <!-- Search Form -->
+          <form @submit.prevent="scout()" class="flex flex-col sm:flex-row gap-3">
+            <input type="text" x-model="searchParams.industry"
+              placeholder="Business type (dentist, restaurant, salon...)"
+              class="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              required>
+            <input type="text" x-model="searchParams.city" placeholder="City, State (Austin, TX)"
+              class="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              required>
+            <button type="submit" :disabled="loadingInitial"
+              class="px-8 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 rounded-xl font-semibold whitespace-nowrap transition-all">
+              <span x-show="!loadingInitial">🔍 Find Leads</span>
+              <span x-show="loadingInitial" class="flex items-center gap-2">
+                <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none">
+                  </circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                Searching...
+              </span>
+            </button>
+          </form>
+        </template>
+
+        <!-- Not Logged In State -->
+        <div x-show="!user && isLoaded" class="text-center py-12">
+          <h2 class="text-2xl font-bold mb-4">Sign in to start finding leads</h2>
+          <button @click="login()"
+            class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold transition-colors">
+            Get Started
           </button>
-        </form>
+        </div>
 
         <!-- Error Display -->
-        <div x-show="error" class="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm" x-text="error"></div>
+        <div x-show="error" class="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm"
+          x-text="error"></div>
       </div>
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 px-4 py-6">
+    <main class="flex-1 px-4 py-6" x-show="user">
       <div class="max-w-6xl mx-auto">
 
         <!-- Empty State -->
@@ -66,7 +85,8 @@
           <div class="text-6xl mb-4">🏢</div>
           <h2 class="text-2xl font-bold mb-2">Find Local Businesses</h2>
           <p class="text-slate-400 max-w-md mx-auto">
-            Search for businesses in any industry and location. Get AI-powered insights on how to help them with automation, websites, and social media.
+            Search for businesses in any industry and location. Get AI-powered insights on how to help them with
+            automation, websites, and social media.
           </p>
           <div class="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto text-left">
             <div class="p-4 bg-slate-900 rounded-xl border border-slate-800">
@@ -90,7 +110,8 @@
         <!-- Loading State -->
         <div x-show="loadingInitial" class="text-center py-16">
           <svg class="animate-spin h-12 w-12 mx-auto mb-4 text-indigo-500" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none">
+            </circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
           </svg>
           <p class="text-slate-400">Searching for businesses...</p>
@@ -107,11 +128,8 @@
         <!-- Results Grid -->
         <div x-show="leads.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <template x-for="lead in leads" :key="lead.id">
-            <div
-              @click="analyzeLead(lead)"
-              :class="lead.analyzed ? 'border-green-500/30' : 'border-slate-800'"
-              class="p-4 rounded-xl bg-slate-900 hover:bg-slate-800 border cursor-pointer transition-all"
-            >
+            <div @click="analyzeLead(lead)" :class="lead.analyzed ? 'border-green-500/30' : 'border-slate-800'"
+              class="p-4 rounded-xl bg-slate-900 hover:bg-slate-800 border cursor-pointer transition-all">
               <!-- Business Header -->
               <div class="flex items-start justify-between mb-3">
                 <div class="flex-1 min-w-0">
@@ -119,21 +137,23 @@
                   <p class="text-xs text-slate-400 truncate" x-text="lead.address"></p>
                 </div>
                 <div x-show="lead.analysis" class="ml-2 flex-shrink-0">
-                  <span
-                    :class="{
+                  <span :class="{
                       'bg-red-500/20 text-red-400': lead.analysis?.opportunityScore === 'HIGH',
                       'bg-yellow-500/20 text-yellow-400': lead.analysis?.opportunityScore === 'MEDIUM',
                       'bg-green-500/20 text-green-400': lead.analysis?.opportunityScore === 'LOW'
-                    }"
-                    class="px-2 py-1 rounded-lg text-xs font-medium"
-                    x-text="lead.analysis?.opportunityScore"
-                  ></span>
+                    }" class="px-2 py-1 rounded-lg text-xs font-medium"
+                    x-text="lead.analysis?.opportunityScore"></span>
                 </div>
               </div>
 
               <!-- Analyzing State -->
-              <div x-show="analyzingLeadId === lead.id" class="flex items-center justify-center gap-2 text-indigo-400 text-sm py-6">
-                <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+              <div x-show="analyzingLeadId === lead.id"
+                class="flex items-center justify-center gap-2 text-indigo-400 text-sm py-6">
+                <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none">
+                  </circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
                 Analyzing with AI...
               </div>
 
@@ -149,7 +169,8 @@
 
               <!-- Not Analyzed Yet -->
               <div x-show="!lead.analysis && analyzingLeadId !== lead.id" class="text-center py-4">
-                <button class="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 rounded-lg text-sm font-medium transition-colors">
+                <button
+                  class="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 rounded-lg text-sm font-medium transition-colors">
                   🤖 Get AI Insights
                 </button>
               </div>
@@ -160,24 +181,14 @@
     </main>
 
     <!-- Comprehensive Insights Modal -->
-    <div
-      x-show="insightsModal"
-      x-transition:enter="transition ease-out duration-200"
-      x-transition:enter-start="opacity-0"
-      x-transition:enter-end="opacity-100"
-      x-transition:leave="transition ease-in duration-150"
-      x-transition:leave-start="opacity-100"
-      x-transition:leave-end="opacity-0"
-      class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50"
-      @click.self="closeModal()"
-    >
-      <div
-        x-show="insightsModal"
-        x-transition:enter="transition ease-out duration-200"
-        x-transition:enter-start="opacity-0 scale-95"
-        x-transition:enter-end="opacity-100 scale-100"
-        class="bg-slate-900 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-      >
+    <div x-show="insightsModal" x-transition:enter="transition ease-out duration-200"
+      x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+      x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100"
+      x-transition:leave-end="opacity-0" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50"
+      @click.self="closeModal()">
+      <div x-show="insightsModal" x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+        class="bg-slate-900 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <template x-if="insightsModal">
           <div class="flex flex-col h-full max-h-[90vh]">
             <!-- Modal Header -->
@@ -187,28 +198,40 @@
                   <h2 class="text-xl font-bold truncate" x-text="insightsModal.name"></h2>
                   <p class="text-sm text-slate-400 truncate" x-text="insightsModal.address"></p>
                   <div class="flex items-center gap-3 mt-2">
-                    <span
-                      :class="{
+                    <span :class="{
                         'bg-red-500/20 text-red-400': insightsModal.analysis?.opportunityScore === 'HIGH',
                         'bg-yellow-500/20 text-yellow-400': insightsModal.analysis?.opportunityScore === 'MEDIUM',
                         'bg-green-500/20 text-green-400': insightsModal.analysis?.opportunityScore === 'LOW'
-                      }"
-                      class="px-3 py-1 rounded-full text-xs font-semibold"
-                      x-text="insightsModal.analysis?.opportunityScore + ' OPPORTUNITY'"
-                    ></span>
-                    <span class="text-xs text-slate-500" x-text="'Contact: ' + (insightsModal.analysis?.estimatedContactName || 'Business Owner')"></span>
+                      }" class="px-3 py-1 rounded-full text-xs font-semibold"
+                      x-text="insightsModal.analysis?.opportunityScore + ' OPPORTUNITY'"></span>
+                    <span class="text-xs text-slate-500"
+                      x-text="'Contact: ' + (insightsModal.analysis?.estimatedContactName || 'Business Owner')"></span>
                   </div>
                 </div>
-                <button @click="closeModal()" class="text-slate-400 hover:text-white text-2xl flex-shrink-0">&times;</button>
+                <button @click="closeModal()"
+                  class="text-slate-400 hover:text-white text-2xl flex-shrink-0">&times;</button>
               </div>
 
               <!-- Tabs -->
               <div class="flex gap-1 mt-4 overflow-x-auto pb-1">
-                <button @click="activeTab = 'overview'" :class="activeTab === 'overview' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors">Overview</button>
-                <button @click="activeTab = 'website'" :class="activeTab === 'website' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors">Website</button>
-                <button @click="activeTab = 'social'" :class="activeTab === 'social' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors">Social Media</button>
-                <button @click="activeTab = 'ai'" :class="activeTab === 'ai' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors">AI & Automation</button>
-                <button @click="activeTab = 'email'" :class="activeTab === 'email' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'" class="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors">📧 Email</button>
+                <button @click="activeTab = 'overview'"
+                  :class="activeTab === 'overview' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'"
+                  class="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors">Overview</button>
+                <button @click="activeTab = 'website'"
+                  :class="activeTab === 'website' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'"
+                  class="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors">Website</button>
+                <button @click="activeTab = 'social'"
+                  :class="activeTab === 'social' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'"
+                  class="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors">Social
+                  Media</button>
+                <button @click="activeTab = 'ai'"
+                  :class="activeTab === 'ai' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'"
+                  class="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors">AI &
+                  Automation</button>
+                <button @click="activeTab = 'email'"
+                  :class="activeTab === 'email' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'"
+                  class="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors">📧
+                  Email</button>
               </div>
             </div>
 
@@ -236,7 +259,8 @@
 
                 <div>
                   <h3 class="text-sm font-semibold text-slate-300 mb-2">📈 Long-Term Strategy</h3>
-                  <p class="text-slate-400 text-sm leading-relaxed" x-text="insightsModal.analysis?.longTermStrategy"></p>
+                  <p class="text-slate-400 text-sm leading-relaxed" x-text="insightsModal.analysis?.longTermStrategy">
+                  </p>
                 </div>
               </div>
 
@@ -266,7 +290,8 @@
                   <h3 class="text-sm font-semibold text-slate-300 mb-2">🤖 AI & Automation Opportunities</h3>
                   <ul class="space-y-3">
                     <template x-for="opp in insightsModal.analysis?.aiAutomationOpportunities" :key="opp">
-                      <li class="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-sm text-slate-300" x-text="opp"></li>
+                      <li class="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-sm text-slate-300"
+                        x-text="opp"></li>
                     </template>
                   </ul>
                 </div>
@@ -285,15 +310,21 @@
               <div x-show="activeTab === 'email'" class="space-y-4">
                 <div class="flex items-center justify-between">
                   <h3 class="text-sm font-semibold text-slate-300">📧 Draft Outreach Email</h3>
-                  <button
-                    @click="copyEmail()"
-                    class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium transition-colors"
-                  >
-                    📋 Copy Email
-                  </button>
+                  <div class="flex gap-2">
+                    <button @click="sendCampaign()" :disabled="sendingCampaign"
+                      class="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 rounded-lg text-xs font-bold text-white transition-all disabled:opacity-50 flex items-center gap-2">
+                      <span x-show="!sendingCampaign">🚀 Send Campaign</span>
+                      <span x-show="sendingCampaign" class="animate-pulse">Sending...</span>
+                    </button>
+                    <button @click="copyEmail()"
+                      class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-medium transition-colors">
+                      📋 Copy
+                    </button>
+                  </div>
                 </div>
                 <div class="bg-slate-800 rounded-xl p-4">
-                  <p class="text-slate-200 text-sm leading-relaxed whitespace-pre-line" x-text="insightsModal.analysis?.draftEmail"></p>
+                  <p class="text-slate-200 text-sm leading-relaxed whitespace-pre-line"
+                    x-text="insightsModal.analysis?.draftEmail"></p>
                 </div>
               </div>
             </div>
@@ -301,17 +332,13 @@
             <!-- Modal Footer -->
             <div class="p-4 sm:p-6 border-t border-slate-800 flex-shrink-0">
               <div class="flex flex-wrap gap-3">
-                <button
-                  @click="copyAllInsights()"
-                  class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium transition-colors text-sm"
-                >
+                <button @click="copyAllInsights()"
+                  class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium transition-colors text-sm">
                   📋 Copy All Insights
                 </button>
-                <a
-                  :href="insightsModal.mapsUrl || `https://google.com/search?q=${encodeURIComponent(insightsModal.name + ' ' + insightsModal.address)}`"
+                <a :href="insightsModal.mapsUrl || `https://google.com/search?q=${encodeURIComponent(insightsModal.name + ' ' + insightsModal.address)}`"
                   target="_blank"
-                  class="py-3 px-6 bg-slate-800 hover:bg-slate-700 rounded-xl font-medium transition-colors text-sm text-center"
-                >
+                  class="py-3 px-6 bg-slate-800 hover:bg-slate-700 rounded-xl font-medium transition-colors text-sm text-center">
                   🗺️ View on Maps
                 </a>
               </div>
@@ -321,8 +348,36 @@
       </div>
     </div>
 
+    <!-- Settings Modal -->
+    <div x-show="settingsModal" style="display: none;"
+      class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+      <div class="bg-slate-900 rounded-2xl max-w-lg w-full p-6">
+        <h2 class="text-xl font-bold mb-4">Agency Settings</h2>
+        <form @submit.prevent="updateSettings()">
+          <div class="mb-4">
+            <label class="block text-sm text-slate-400 mb-1">Agency Name</label>
+            <input type="text" x-model="branding.name"
+              class="w-full bg-slate-800 border-slate-700 rounded-lg px-3 py-2 text-white">
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm text-slate-400 mb-1">Primary Color</label>
+            <input type="color" x-model="branding.primaryColor"
+              class="w-full bg-slate-800 border-slate-700 rounded-lg h-10 cursor-pointer">
+          </div>
+          <div class="flex justify-end gap-3">
+            <button type="button" @click="settingsModal = false"
+              class="px-4 py-2 text-slate-400 hover:text-white">Cancel</button>
+            <button type="submit"
+              class="px-4 py-2 bg-indigo-600 rounded-lg hover:bg-indigo-500 text-white font-medium">Save
+              Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
   </div>
 
   <script type="module" src="/src/main.js"></script>
 </body>
+
 </html>

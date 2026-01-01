@@ -3,12 +3,19 @@ import { config } from '../config';
 import { logger } from '../utils/logger.util';
 
 class CacheService {
-  private client: Redis;
+  private client!: Redis;
   private connected: boolean = false;
 
   constructor() {
+    if (!config.redis.url || config.redis.url === 'undefined') {
+      logger.warn('🚫 No REDIS_URL found. Caching disabled (Zero-cost mode).');
+      return;
+    }
+
     this.client = new Redis(config.redis.url, {
       retryStrategy: (times) => {
+        // Stop retrying after 3 attempts if we can't connect initially to keep logs clean
+        if (times > 3) return null;
         const delay = Math.min(times * 50, 2000);
         return delay;
       },
@@ -22,7 +29,12 @@ class CacheService {
 
     this.client.on('error', (err) => {
       this.connected = false;
-      logger.error(`Redis error: ${err.message}`);
+      // Suppress connection refused errors in logs if we are just starting up
+      if (err.message.includes('ECONNREFUSED')) {
+        logger.warn('Redis connection refused. Running without cache.');
+      } else {
+        logger.error(`Redis error: ${err.message}`);
+      }
     });
   }
 

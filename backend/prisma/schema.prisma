@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id             String         @id @default(uuid())
+  name           String
+  slug           String         @unique
+  branding       Json?          // { logoUrl: string, primaryColor: string, etc. }
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  
+  users          User[]
+  leads          Lead[]
+  campaigns      Campaign[]
+  subscription   Subscription?
+}
+
+model User {
+  id             String       @id // Clerk ID
+  email          String       @unique
+  firstName      String?
+  lastName       String?
+  role           Role         @default(MEMBER)
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Lead {
+  id             String   @id @default(uuid())
+  googlePlaceId  String
+  name           String
+  address        String?
+  industry       String?
+  website        String?
+  phone          String?
+  
+  // Enriched Data
+  email          String?
+  linkedinProfile String?
+  
+  // Analysis
+  opportunityScore String? // HIGH, MEDIUM, LOW
+  analysisData     Json?   // Full AI analysis blob
+  
+  status         LeadStatus @default(NEW)
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, googlePlaceId])
+}
+
+model Campaign {
+  id             String   @id @default(uuid())
+  name           String
+  status         CampaignStatus @default(DRAFT)
+  
+  subjectTemplate String
+  bodyTemplate    String
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Subscription {
+  id             String   @id @default(uuid())
+  stripeId       String   @unique
+  status         String
+  planId         String
+  
+  organizationId String   @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  currentPeriodEnd DateTime
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  LOST
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+}

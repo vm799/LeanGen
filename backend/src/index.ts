@@ -1,9 +1,11 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { logger } from './utils/logger.util';
 import { leadsRouter } from './routes/leads.route';
+import { outreachRouter } from './routes/outreach.route';
+import { organizationRouter } from './routes/organization.route';
 import { healthRouter } from './routes/health.route';
 import { errorHandler } from './utils/error-handler.util';
 import { requestLogger } from './utils/request-logger.util';
@@ -30,9 +32,16 @@ app.use(express.urlencoded({ extended: true }));
 // Request logging
 app.use(requestLogger);
 
-// Routes
+// Authentication
+import { requireAuth, attachUser } from './middleware/auth.middleware';
+// Public routes (Health check)
 app.use('/api/health', healthRouter);
+
+// Protected routes
+app.use('/api/*', requireAuth, attachUser);
 app.use('/api/leads', leadsRouter);
+app.use('/api/outreach', outreachRouter);
+app.use('/api/organization', organizationRouter);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

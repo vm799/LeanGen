@@ -1,7 +1,16 @@
 import Alpine from 'alpinejs';
+import Clerk from '@clerk/clerk-js';
 
 // Initialize Alpine
 window.Alpine = Alpine;
+
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+if (!clerkPubKey) {
+  console.error("Missing Clerk Publishable Key");
+}
+
+const clerk = new Clerk(clerkPubKey);
 
 // Initialize app
 document.addEventListener('alpine:init', () => {
@@ -14,31 +23,124 @@ document.addEventListener('alpine:init', () => {
     leads: [],
     selectedLead: null,
     loadingInitial: false,
+    sendingCampaign: false,
     analyzingLeadId: null,
     error: null,
-    insightsModal: null, // For the insights modal
-    activeTab: 'overview', // Tab state for modal
+    insightsModal: null,
+    activeTab: 'overview',
+    settingsModal: false,
+
+    // Auth State
+    user: null,
+    isLoaded: false,
+
+    // Branding State
+    branding: {
+      name: 'LeadGenius',
+      primaryColor: '#4f46e5',
+      logoUrl: null
+    },
 
     // Initialize
-    init() {
+    async init() {
       console.log('LeadGenius initialized');
+      await this.initClerk();
+    },
+
+    async initClerk() {
+      try {
+        await clerk.load();
+
+        // Handle auth state changes
+        clerk.addListener((payload) => {
+          this.user = payload.user;
+          this.isLoaded = true;
+        });
+
+        this.user = clerk.user;
+        this.isLoaded = true;
+
+        if (this.user) {
+          this.mountUserButton();
+        } else {
+          // If we had a mount point for sign in, we'd mount it here,
+          // but we'll probably rely on a modal or redirect logic in HTML
+        }
+      } catch (err) {
+        console.error("Error loading Clerk", err);
+        this.error = "Authentication failed to load.";
+        this.isLoaded = true;
+      }
+    },
+
+    async fetchBranding() {
+      try {
+        const token = await clerk.session?.getToken();
+        const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/organization`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const org = await response.json();
+          if (org.branding) {
+            this.branding = { ...this.branding, ...org.branding };
+            if (org.name) this.branding.name = org.name;
+            if (this.branding.primaryColor) {
+              document.documentElement.style.setProperty('--primary-color', this.branding.primaryColor);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("Retaining default branding");
+      }
+    },
+
+    mountUserButton() {
+      // Use setTimeout to ensure DOM is ready if it's dynamic
+      setTimeout(() => {
+        const userButtonDiv = document.getElementById('user-button');
+        if (userButtonDiv) {
+          clerk.mountUserButton(userButtonDiv);
+        }
+      }, 100);
+    },
+
+    login() {
+      clerk.openSignIn();
     },
 
     // Main search function
     async scout() {
+      if (!this.user) {
+        this.login();
+        return;
+      }
+
       this.loadingInitial = true;
       this.error = null;
       this.leads = [];
       this.selectedLead = null;
 
       try {
-        const response = await fetch('/api/leads', {
+        // Get token
+        const token = await clerk.session?.getToken();
+
+        const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/leads`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify(this.searchParams),
         });
 
         if (!response.ok) {
+          // Check for 401
+          if (response.status === 401) {
+            this.error = "Session expired. Please log in again.";
+            this.user = null; // Force re-render
+            return;
+          }
           const errorData = await response.json().catch(() => ({}));
           const errorMsg = errorData.error || `API error: ${response.status}`;
           const hint = errorData.hint ? ` (${errorData.hint})` : '';
@@ -72,9 +174,13 @@ document.addEventListener('alpine:init', () => {
       }
 
       try {
-        const response = await fetch(`/api/leads/${lead.id}/analyze`, {
+        const token = await clerk.session?.getToken();
+        const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/leads/${lead.id}/analyze`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify({
             name: lead.name,
             address: lead.address,
@@ -133,6 +239,79 @@ document.addEventListener('alpine:init', () => {
         document.execCommand('copy');
         document.body.removeChild(textarea);
         alert('Email copied!');
+      }
+    },
+
+    // Send one-click campaign
+    async sendCampaign() {
+      if (!this.insightsModal?.analysis?.draftEmail) return;
+
+      const lead = this.insightsModal;
+      const email = lead.analysis.estimatedEmail || 'demo@example.com'; // In real app, we'd use found email
+      const subject = `Question about ${lead.name}'s digital presence`;
+      const html = lead.analysis.draftEmail.replace(/\n/g, '<br>');
+
+      if (!confirm(`Send email to ${email}?`)) return;
+
+      this.sendingCampaign = true;
+
+      try {
+        const token = await clerk.session?.getToken();
+
+        // 1. Find Email (mock flow for now if not present)
+        // const emailData = await fetch...
+
+        // 2. Send Email
+        const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/outreach/send-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            to: email, // In production, we'd verify this email first
+            subject,
+            html
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('Campaign sent successfully! 🚀');
+        } else {
+          throw new Error(data.error?.message || 'Failed to send');
+        }
+
+      } catch (error) {
+        console.error('Campaign error:', error);
+        alert(`Failed to send campaign: ${error.message}`);
+      } finally {
+        this.sendingCampaign = false;
+      }
+    },
+
+    async updateSettings() {
+      try {
+        const token = await clerk.session?.getToken();
+        const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/organization`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(this.branding)
+        });
+
+        if (response.ok) {
+          alert('Settings saved!');
+          this.settingsModal = false;
+          this.fetchBranding(); // Refresh to apply changes
+        } else {
+          throw new Error('Failed to save settings');
+        }
+      } catch (e) {
+        alert(e.message);
       }
     },
 

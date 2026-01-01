@@ -16,6 +16,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@clerk/clerk-js": "^5.117.0",
     "@google/generative-ai": "^0.21.0",
     "alpinejs": "^3.14.1",
     "cheerio": "^1.0.0",

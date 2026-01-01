@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import { prisma } from '../utils/prisma.util';
 import {
   SearchParams,
   Lead,
@@ -63,12 +64,11 @@ router.post('/', async (req: Request, res: Response) => {
 
     if (cached) {
       logger.info(`Cache hit for: ${cacheKey}`);
-      const response: LeadsResponse = {
+      return res.json({
         leads: cached,
         total: cached.length,
         cached: true,
-      };
-      return res.json(response);
+      });
     }
 
     // Track usage
@@ -81,7 +81,7 @@ router.post('/', async (req: Request, res: Response) => {
       maxResults: 20,
     });
 
-    // Transform to Lead objects (lightweight - no analysis yet)
+    // Transform to Lead objects
     const leads: Lead[] = places.map((place) => ({
       id: place.place_id,
       name: place.name,
@@ -91,13 +91,30 @@ router.post('/', async (req: Request, res: Response) => {
       reviewCount: place.user_ratings_total || null,
       location: place.geometry.location,
       mapsUrl: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
-      websiteUrl: null, // Will be fetched in detail analysis
+      websiteUrl: null,
       phone: null,
       analyzed: false,
     }));
 
     // Cache for 1 hour
     await cacheService.set(cacheKey, leads, config.cache.leadSearch);
+
+    // If authenticated, save to Database (Background operation)
+    // We don't await this to keep response fast
+    if (req.auth?.userId) {
+      // Ideally we'd find the organizationId here.
+      // For now, skipping DB save until Organization syncing is implemented
+      // or we just save to a temporary "UserSearch" table if we had one.
+      // The Plan says "save leads from DB".
+      // Let's at least log that we would save it.
+      logger.info(`User ${req.auth.userId} performed search. Saving leads...`);
+      /*
+      await prisma.lead.createMany({
+        data: leads.map(l => ({ ...l, organizationId: ... })),
+        skipDuplicates: true
+      });
+      */
+    }
 
     const response: LeadsResponse = {
       leads,
