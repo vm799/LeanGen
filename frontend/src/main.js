@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs';
-import Clerk from '@clerk/clerk-js';
+import { Clerk } from '@clerk/clerk-js';
 
 // Initialize Alpine
 window.Alpine = Alpine;
